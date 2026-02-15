@@ -41,7 +41,7 @@ router.post('/metrics', async (req, res) => {
       uptime: uptimeSeconds,
     });
 
-    await metic.save();
+    await metric.save();
 
     //Update lastDataSent
     matchedServer.lastDataSent = new Date();

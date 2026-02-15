@@ -13,4 +13,4 @@ const metricSchema = new mongoose.Schema({
   uptime: { type: Number, required: true },
 });
 
-module.exports = mongoose.models('Metric', metricSchema);
+module.exports = mongoose.model('Metric', metricSchema);

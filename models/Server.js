@@ -17,8 +17,8 @@ const serverSchema = new mongoose.Schema(
       downAfterSeconds: { type: Number, default: 60 },
     },
     lastDataSent: { type: Date },
-    status: { type: String, enum: ['OK', 'Warning', 'Critical', 'Down'] },
-    default: 'OK',
+    status: { type: String, enum: ['Ok', 'Warning', 'Critical', 'Down'], default: 'Ok'},
+
     cretedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true },
