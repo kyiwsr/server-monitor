@@ -58,4 +58,34 @@ router.post('/metrics', async (req, res) => {
   }
 });
 
+router.get('/servers', async(req, res) => {
+  try {
+    const servers = await Server.find().select('-agentToken');
+
+    const serversWithMetrics = await Promise.all(
+      servers.map( async (server) => { 
+        const latestMetric = await Metric.findOne({ serverId: server._id}).sort({timestamp: -1}).
+        limit(1);
+      
+        return {
+          _id: server._id,
+          name: server.name,
+          host: server.host,
+          status: server.status,
+          lastDataSent: server.lastDataSent,
+          currentMetrics: latestMetric ? {
+            cpuPercent: latestMetric.cpuPercent,
+            ramPercent: latestMetric.ramPercent,
+            diskPercent: latestMetric.diskPercent,
+            uptime: latestMetric.uptime
+          } : null
+        };
+      })
+    );
+  } catch (err){
+    console.error('Error fetching server:', err);
+    res.status(500).json({ error: 'Server error'});
+  }
+});
+
 module.exports = router;
