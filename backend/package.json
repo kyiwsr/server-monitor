@@ -1,0 +1,30 @@
+{
+  "name": "fyp-server-monitor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kyiwsr/fyp-server-monitor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/kyiwsr/fyp-server-monitor/issues"
+  },
+  "homepage": "https://github.com/kyiwsr/fyp-server-monitor#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "chart.js": "^4.5.1",
+    "dotenv": "^17.3.1",
+    "element-plus": "^2.13.7",
+    "express": "^5.2.1",
+    "mongoose": "^9.2.1",
+    "vue-chart.js": "^0.2.0"
+  }
+}
