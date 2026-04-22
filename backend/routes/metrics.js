@@ -88,4 +88,49 @@ router.get('/servers', async(req, res) => {
   }
 });
 
+router.get('/servers/:id/metrics', async (req, res) => {
+  try {
+    const {id} = req.params;
+    const timeRange = req.query.timeRange || '24h';
+
+    //Calculate time cutoff based on range
+    const now = new Date();
+    let cutoffTime;
+
+    if (timeRange === '1h') {
+      cutoffTime = new Date(now - 60 * 60 * 1000);
+    } else if (timeRange === '6h') {
+      cutoffTime = new Date(now - 6 * 60 * 60 * 1000);
+    } else if (timeRange === '24h') {
+      cutoffTime = new Date(now - 24 * 60 * 60 * 1000);
+    } else if (timeRange === '48h') {
+      cutoffTime = new Date(now - 48 * 60 * 60 * 1000);
+    } else {
+      cutoffTime = new Date(now - 24 * 60 * 60 * 1000);
+    }
+
+    const allMetrics = await Metric.find({
+      serverId: id,
+      timestamp: {$gte: cutoffTime}
+    }).sort({ timestamp: 1});
+
+    const sampledMetrics = [];
+    const sampleInterval = 5 * 60 * 1000;
+    let lastSampleTime = 0;
+
+    allMetrics.forEach(metric => {
+      const metricTime = new Date(metric.timestamp).getTime();
+      if (metricTime - lastSampleTime >= sampleInterval) {
+        sampledMetrics.push(metric);
+        lastSampleTime = metricTime;
+      }
+    });
+
+    res.json(sampledMetrics)
+  } catch (err) {
+    console.error('Error fetching metrics:', err);
+    res.status(500).json({error: 'Server error'});
+  }
+});
+
 module.exports = router;
