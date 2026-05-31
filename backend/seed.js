@@ -2,11 +2,28 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
 const Server = require('./models/Server');
+const User = require('./models/User');
 
 const seedServer = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('Connected to MongoDB');
+
+    // Check if admin user exists
+    let adminUser = await User.findOne({ email: 'admin@example.com' });
+    if (!adminUser) {
+      adminUser = new User({
+        name: 'Admin',
+        email: 'admin@example.com',
+        password: 'admin123',
+        role: 'admin',
+        isActive: true,
+      });
+      await adminUser.save();
+      console.log(`Admin user created: admin@example.com / admin123`);
+    } else {
+      console.log('Admin user already exists');
+    }
 
     const Token = 'agent-token-demo';
 
@@ -34,6 +51,7 @@ const seedServer = async () => {
         downAfterSeconds: 60,
       },
       status: 'Ok',
+      createdBy: adminUser._id,
     });
 
     await server.save();
