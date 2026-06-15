@@ -7,10 +7,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const { startDownChecker } = require('./utils/downChecker');
+
 //Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
+  .then(() => {
+    console.log('Connected to MongoDB');
+    // Start the background server-down alert scheduler once the DB is ready
+    startDownChecker();
+  })
   .catch(err => console.error('MongodDB connection error:', err));
 
 //Routes

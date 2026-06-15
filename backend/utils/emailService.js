@@ -48,7 +48,17 @@ const sendAlertEmail = async (alert, server, user) => {
     }
 
     const severityLabel = alert.severity.toUpperCase();
-    const subject = `[${severityLabel}] ${alert.type.toUpperCase()} Alert - ${server.name}`;
+    const isDown = alert.type === 'down';
+    const subject = isDown
+      ? `[${severityLabel}] Server Down - ${server.name}`
+      : `[${severityLabel}] ${alert.type.toUpperCase()} Alert - ${server.name}`;
+
+    // "down" alerts are not percentage-based, so present time-based detail instead
+    const metricLabel = isDown ? 'Availability' : alert.type.toUpperCase();
+    const valueCell = isDown ? 'Unreachable' : `${alert.value}%`;
+    const thresholdCell = isDown
+      ? `No data for &gt; ${alert.threshold}s`
+      : `${alert.threshold}%`;
 
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -69,15 +79,15 @@ const sendAlertEmail = async (alert, server, user) => {
             </tr>
             <tr>
               <td style="padding: 8px 12px; background: #f5f7fa; font-weight: 600; color: #606266;">Metric</td>
-              <td style="padding: 8px 12px; color: #303133;">${alert.type.toUpperCase()}</td>
+              <td style="padding: 8px 12px; color: #303133;">${metricLabel}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 12px; background: #f5f7fa; font-weight: 600; color: #606266;">Value</td>
-              <td style="padding: 8px 12px; color: ${alert.severity === 'Critical' ? '#F56C6C' : '#E6A23C'}; font-weight: 700;">${alert.value}%</td>
+              <td style="padding: 8px 12px; background: #f5f7fa; font-weight: 600; color: #606266;">${isDown ? 'Status' : 'Value'}</td>
+              <td style="padding: 8px 12px; color: ${alert.severity === 'Critical' ? '#F56C6C' : '#E6A23C'}; font-weight: 700;">${valueCell}</td>
             </tr>
             <tr>
               <td style="padding: 8px 12px; background: #f5f7fa; font-weight: 600; color: #606266;">Threshold</td>
-              <td style="padding: 8px 12px; color: #303133;">${alert.threshold}%</td>
+              <td style="padding: 8px 12px; color: #303133;">${thresholdCell}</td>
             </tr>
             <tr>
               <td style="padding: 8px 12px; background: #f5f7fa; font-weight: 600; color: #606266;">Time</td>
