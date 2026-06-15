@@ -158,16 +158,38 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-page);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(14, 165, 233, 0.12), transparent 42%),
+    radial-gradient(circle at 84% 80%, rgba(14, 165, 233, 0.10), transparent 40%),
+    var(--bg-page);
+}
+
+.register-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border-lighter) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-lighter) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(circle at center, black, transparent 72%);
+  mask-image: radial-gradient(circle at center, black, transparent 72%);
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .register-card {
+  position: relative;
+  z-index: 1;
   width: 420px;
   max-width: 90vw;
   background: var(--bg-card);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 40px 32px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
   border: 1px solid var(--border-light);
 }
 
@@ -177,20 +199,22 @@ const handleRegister = async () => {
 }
 
 .register-logo {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
   background: var(--sidebar-logo-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  margin: 0 auto 18px;
   color: var(--color-accent);
+  box-shadow: 0 0 0 6px var(--color-accent-glow);
 }
 
 .register-header h1 {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   color: var(--text-primary);
   margin: 0 0 4px 0;
 }

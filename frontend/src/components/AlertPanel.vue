@@ -55,6 +55,7 @@
               {{ alert.severity }}
             </el-tag>
           </div>
+          <div class="alert-summary">{{ alert.summary }}</div>
           <div class="alert-metrics">
             <span class="alert-metric" v-for="m in alert.breachedMetrics" :key="m.key">
               <span class="alert-metric-label">{{ m.label }}</span>
@@ -120,12 +121,15 @@ const alerts = computed(() => {
         }
       }
 
+      const finalMetrics = breachedMetrics.length > 0 ? breachedMetrics : [{ key: 'status', label: 'Status', value: s.status === 'Critical' ? 100 : 80, color: s.status === 'Critical' ? '#F56C6C' : '#E6A23C' }]
+
       return {
         serverId: s._id,
         serverName: s.name,
         host: s.host,
         severity: s.status,
-        breachedMetrics: breachedMetrics.length > 0 ? breachedMetrics : [{ key: 'status', label: 'Status', value: s.status === 'Critical' ? 100 : 80, color: s.status === 'Critical' ? '#F56C6C' : '#E6A23C' }],
+        breachedMetrics: finalMetrics,
+        summary: buildSummary(s.status, breachedMetrics),
         timeAgo: timeAgo(s.lastDataSent),
       }
     })
@@ -136,6 +140,29 @@ const alerts = computed(() => {
 })
 
 const alertCount = computed(() => alerts.value.length)
+
+// Turn breached metrics into a plain-language sentence a non-technical user understands
+const FRIENDLY = { CPU: 'CPU', RAM: 'memory', Disk: 'disk space' }
+
+function buildSummary(status, breached) {
+  if (!breached || breached.length === 0) {
+    return status === 'Critical'
+      ? 'Server needs urgent attention'
+      : 'Server needs attention'
+  }
+  const level = status === 'Critical' ? 'critically high' : 'running high'
+  const names = breached.map(m => FRIENDLY[m.label] || m.label.toLowerCase())
+  let subject
+  if (names.length === 1) subject = capitalize(names[0])
+  else if (names.length === 2) subject = `${capitalize(names[0])} and ${names[1]}`
+  else subject = `${capitalize(names[0])}, ${names.slice(1, -1).join(', ')} and ${names[names.length - 1]}`
+  const verb = names.length === 1 ? 'is' : 'are'
+  return `${subject} ${verb} ${level}`
+}
+
+function capitalize(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
 
 function timeAgo(dateStr) {
   if (!dateStr) return ''
@@ -285,6 +312,13 @@ function timeAgo(dateStr) {
   text-overflow: ellipsis;
 }
 
+.alert-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-regular);
+  line-height: 1.4;
+}
+
 .alert-metrics {
   display: flex;
   gap: 8px;
@@ -316,7 +350,7 @@ function timeAgo(dateStr) {
 }
 
 .alert-host {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .alert-sep {

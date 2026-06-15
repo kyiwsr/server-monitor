@@ -10,13 +10,31 @@
       @close="error = ''"
       class="page-alert"
     />
+    <el-alert
+      v-if="successMessage"
+      :title="successMessage"
+      type="success"
+      show-icon
+      :closable="true"
+      @close="successMessage = ''"
+      class="page-alert"
+    />
 
     <!-- Page Header -->
     <div class="page-header">
       <div class="page-header-text">
-        <h1 class="page-title">Servers</h1>
-        <p class="page-subtitle">Manage your monitored servers</p>
+        <div class="page-title-row">
+          <h1 class="page-title">Servers</h1>
+          <span class="server-count-badge" v-if="!loading">{{ servers.length }}</span>
+        </div>
+        <p class="page-subtitle">
+          {{ servers.length }} server{{ servers.length === 1 ? '' : 's' }} monitored<span v-if="statusFilter || searchQuery"> · {{ filteredServers.length }} shown</span>
+        </p>
       </div>
+      <el-button type="primary" size="default" @click="openAddServerDialog" class="add-server-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Server
+      </el-button>
     </div>
 
     <!-- Loading State -->
@@ -157,16 +175,13 @@
                 <span class="cell-time">{{ formatTime(row.lastDataSent) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="Actions" width="90" align="center" fixed="right">
+            <el-table-column label="Actions" width="180" align="center" fixed="right">
               <template #default="{ row }">
-                <el-button
-                  type="primary"
-                  size="small"
-                  link
-                  @click="goToServer(row._id)"
-                >
-                  View
-                </el-button>
+                <div class="table-actions">
+                  <el-button type="primary" size="small" link @click="goToServer(row._id)">View</el-button>
+                  <el-button type="primary" size="small" link @click="openEditDialog(row)">Edit</el-button>
+                  <el-button type="danger" size="small" link @click="confirmDelete(row)">Delete</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -281,6 +296,145 @@
         </div>
       </template>
     </template>
+
+    <!-- Add Server Dialog -->
+    <el-dialog v-model="addDialogVisible" title="Add New Server" width="500px" :close-on-click-modal="false">
+      <el-form :model="addForm" label-position="top" size="small">
+        <el-form-item label="Server Name" required>
+          <el-input v-model="addForm.name" placeholder="e.g. Production Web Server" />
+        </el-form-item>
+        <el-form-item label="Host/IP" required>
+          <el-input v-model="addForm.host" placeholder="e.g. 192.168.1.100 or server.example.com" />
+        </el-form-item>
+        <el-form-item label="Description">
+          <el-input v-model="addForm.description" type="textarea" :rows="2" placeholder="Optional description" />
+        </el-form-item>
+        <el-form-item label="Business Functions">
+          <el-select v-model="addForm.businessFunctions" multiple filterable allow-create default-first-option placeholder="e.g. Website, API" style="width: 100%">
+            <el-option v-for="fn in commonBusinessFunctions" :key="fn" :label="fn" :value="fn" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Tags">
+          <el-select v-model="addForm.tags" multiple filterable allow-create default-first-option placeholder="e.g. production, critical" style="width: 100%">
+            <el-option v-for="tag in commonTags" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Timezone">
+          <el-select v-model="addForm.timezone" placeholder="Select timezone">
+            <el-option label="UTC" value="UTC" />
+            <el-option label="Asia/Kuala_Lumpur" value="Asia/Kuala_Lumpur" />
+            <el-option label="Asia/Singapore" value="Asia/Singapore" />
+            <el-option label="America/New_York" value="America/New_York" />
+            <el-option label="America/Los_Angeles" value="America/Los_Angeles" />
+            <el-option label="Europe/London" value="Europe/London" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="addSaving" @click="saveNewServer">{{ addSaving ? 'Creating...' : 'Create Server' }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Token Display Dialog -->
+    <el-dialog v-model="tokenDialogVisible" title="Server Token" width="480px" :close-on-click-modal="false" :close-on-press-escape="false">
+      <div class="token-dialog-body">
+        <div class="token-dialog-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        </div>
+        <p class="token-dialog-desc" v-if="newToken && isNewServer">
+          Server <strong>{{ newServerName }}</strong> has been created. Copy this agent token now —
+          <strong>it will not be shown again</strong>. Use it in your agent configuration.
+        </p>
+        <p class="token-dialog-desc" v-else-if="newToken">
+          Token regenerated for <strong>{{ regeneratedServerName }}</strong>.
+          Save this token now — it will not be shown again.
+        </p>
+        <div class="token-display-box">
+          <code class="token-value">{{ newToken }}</code>
+          <el-button size="small" type="primary" @click="copyToken" class="copy-btn">{{ tokenCopied ? 'Copied!' : 'Copy' }}</el-button>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="tokenDialogVisible = false">I've Saved the Token</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Edit Server Dialog -->
+    <el-dialog v-model="editDialogVisible" :title="'Edit Server: ' + (editForm?.name || '')" width="550px" :close-on-click-modal="false" class="edit-dialog">
+      <el-form v-if="editForm" :model="editForm" label-position="top" size="small" class="edit-form">
+        <el-form-item label="Server Name">
+          <el-input v-model="editForm.name" placeholder="Enter server name" />
+        </el-form-item>
+        <el-form-item label="Host">
+          <el-input v-model="editForm.host" placeholder="Enter host/IP" />
+        </el-form-item>
+        <el-form-item label="Description">
+          <el-input v-model="editForm.description" type="textarea" :rows="2" placeholder="Enter server description" />
+        </el-form-item>
+        <el-form-item label="Business Functions">
+          <el-select v-model="editForm.businessFunctions" multiple filterable allow-create default-first-option placeholder="Select or type" style="width: 100%">
+            <el-option v-for="fn in commonBusinessFunctions" :key="fn" :label="fn" :value="fn" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Tags">
+          <el-select v-model="editForm.tags" multiple filterable allow-create default-first-option placeholder="Select or type" style="width: 100%">
+            <el-option v-for="tag in commonTags" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </el-form-item>
+        <div class="thresholds-title">Threshold Settings</div>
+        <div class="thresholds-grid">
+          <el-form-item label="CPU Warning %">
+            <el-input-number v-model="editForm.thresholds.cpuWarn" :min="0" :max="100" controls-position="right" class="threshold-input" />
+          </el-form-item>
+          <el-form-item label="CPU Critical %">
+            <el-input-number v-model="editForm.thresholds.cpuCrit" :min="0" :max="100" controls-position="right" class="threshold-input" />
+          </el-form-item>
+          <el-form-item label="RAM Warning %">
+            <el-input-number v-model="editForm.thresholds.ramWarn" :min="0" :max="100" controls-position="right" class="threshold-input" />
+          </el-form-item>
+          <el-form-item label="RAM Critical %">
+            <el-input-number v-model="editForm.thresholds.ramCrit" :min="0" :max="100" controls-position="right" class="threshold-input" />
+          </el-form-item>
+          <el-form-item label="Disk Warning %">
+            <el-input-number v-model="editForm.thresholds.diskWarn" :min="0" :max="100" controls-position="right" class="threshold-input" />
+          </el-form-item>
+          <el-form-item label="Disk Critical %">
+            <el-input-number v-model="editForm.thresholds.diskCrit" :min="0" :max="100" controls-position="right" class="threshold-input" />
+          </el-form-item>
+          <el-form-item label="Down After (seconds)">
+            <el-input-number v-model="editForm.thresholds.downAfterSeconds" :min="10" :max="3600" controls-position="right" class="threshold-input" />
+          </el-form-item>
+        </div>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editDialogVisible = false">Cancel</el-button>
+          <el-button type="primary" @click="saveServer" :loading="saving">{{ saving ? 'Saving...' : 'Save' }}</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- Delete Confirmation Dialog -->
+    <el-dialog v-model="deleteDialogVisible" title="Delete Server" width="400px">
+      <div class="delete-dialog-body">
+        <div class="delete-dialog-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+        </div>
+        <p class="delete-dialog-text">
+          Are you sure you want to delete <strong>{{ deleteServerName }}</strong>?
+          This will permanently remove the server and all associated metrics and alerts.
+        </p>
+      </div>
+      <template #footer>
+        <el-button @click="deleteDialogVisible = false">Cancel</el-button>
+        <el-button type="danger" :loading="deleting" @click="handleDelete">{{ deleting ? 'Deleting...' : 'Delete Server' }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -297,7 +451,40 @@ const statusFilter = ref('')
 const viewMode = ref('table') // 'table' | 'cards'
 const loading = ref(true)
 const error = ref('')
+const successMessage = ref('')
 let refreshInterval = null
+
+// Server management dialogs
+const addDialogVisible = ref(false)
+const addSaving = ref(false)
+const addForm = ref({
+  name: '',
+  host: '',
+  description: '',
+  businessFunctions: [],
+  tags: [],
+  timezone: 'UTC',
+})
+
+const tokenDialogVisible = ref(false)
+const newToken = ref('')
+const newServerName = ref('')
+const regeneratedServerName = ref('')
+const isNewServer = ref(false)
+const tokenCopied = ref(false)
+
+const editDialogVisible = ref(false)
+const editForm = ref(null)
+const editServerId = ref(null)
+const saving = ref(false)
+
+const deleteDialogVisible = ref(false)
+const deleteServerId = ref(null)
+const deleteServerName = ref('')
+const deleting = ref(false)
+
+const commonBusinessFunctions = ['Website', 'API', 'Database', 'Point of Sale', 'Email', 'File Storage', 'Monitoring', 'Backup']
+const commonTags = ['production', 'staging', 'development', 'critical', 'high-priority', 'monitoring']
 
 const filteredServers = computed(() => {
   let result = servers.value
@@ -356,6 +543,117 @@ function goToServer(id) {
   router.push(`/server/${id}`)
 }
 
+// === Server CRUD ===
+function openAddServerDialog() {
+  addForm.value = { name: '', host: '', description: '', businessFunctions: [], tags: [], timezone: 'UTC' }
+  addDialogVisible.value = true
+}
+
+async function saveNewServer() {
+  if (!addForm.value.name || !addForm.value.host) {
+    error.value = 'Server name and host are required'
+    setTimeout(() => { error.value = '' }, 3000)
+    return
+  }
+  addSaving.value = true
+  try {
+    const response = await api.createServer(addForm.value)
+    newToken.value = response.data.token
+    newServerName.value = response.data.server.name
+    isNewServer.value = true
+    addDialogVisible.value = false
+    tokenDialogVisible.value = true
+    successMessage.value = 'Server created successfully'
+    await fetchServers()
+    setTimeout(() => { successMessage.value = '' }, 4000)
+  } catch (err) {
+    error.value = 'Failed to create server'
+    console.error('Error creating server:', err)
+    setTimeout(() => { error.value = '' }, 4000)
+  } finally {
+    addSaving.value = false
+  }
+}
+
+function copyToken() {
+  navigator.clipboard.writeText(newToken.value).then(() => {
+    tokenCopied.value = true
+    setTimeout(() => { tokenCopied.value = false }, 2000)
+  }).catch(() => {
+    const textarea = document.createElement('textarea')
+    textarea.value = newToken.value
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    tokenCopied.value = true
+    setTimeout(() => { tokenCopied.value = false }, 2000)
+  })
+}
+
+function openEditDialog(server) {
+  editServerId.value = server._id
+  editForm.value = {
+    name: server.name,
+    host: server.host,
+    description: server.description || '',
+    businessFunctions: server.businessFunctions || [],
+    tags: server.tags || [],
+    thresholds: {
+      cpuWarn: server.thresholds?.cpuWarn ?? 70,
+      cpuCrit: server.thresholds?.cpuCrit ?? 90,
+      ramWarn: server.thresholds?.ramWarn ?? 70,
+      ramCrit: server.thresholds?.ramCrit ?? 90,
+      diskWarn: server.thresholds?.diskWarn ?? 75,
+      diskCrit: server.thresholds?.diskCrit ?? 90,
+      downAfterSeconds: server.thresholds?.downAfterSeconds ?? 60,
+    },
+  }
+  editDialogVisible.value = true
+}
+
+async function saveServer() {
+  if (!editForm.value || !editServerId.value) return
+  saving.value = true
+  try {
+    await api.updateServer(editServerId.value, editForm.value)
+    editDialogVisible.value = false
+    successMessage.value = 'Server settings updated successfully'
+    await fetchServers()
+    setTimeout(() => { successMessage.value = '' }, 4000)
+  } catch (err) {
+    error.value = 'Failed to update server settings'
+    console.error('Error updating server:', err)
+    setTimeout(() => { error.value = '' }, 4000)
+  } finally {
+    saving.value = false
+  }
+}
+
+function confirmDelete(server) {
+  deleteServerId.value = server._id
+  deleteServerName.value = server.name
+  deleteDialogVisible.value = true
+}
+
+async function handleDelete() {
+  if (!deleteServerId.value) return
+  deleting.value = true
+  try {
+    await api.deleteServer(deleteServerId.value)
+    deleteDialogVisible.value = false
+    successMessage.value = 'Server deleted successfully'
+    await fetchServers()
+    setTimeout(() => { successMessage.value = '' }, 4000)
+  } catch (err) {
+    error.value = 'Failed to delete server'
+    console.error('Error deleting server:', err)
+    setTimeout(() => { error.value = '' }, 4000)
+  } finally {
+    deleting.value = false
+  }
+}
+
 const fetchServers = async () => {
   try {
     const response = await api.getServers()
@@ -392,12 +690,40 @@ onUnmounted(() => {
 /* ===== Page Header ===== */
 .page-header {
   margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
 }
 
 .page-header-text {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.server-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: var(--color-accent-light);
+  color: var(--color-accent-dark);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.add-server-btn {
+  flex-shrink: 0;
 }
 
 .page-title {
@@ -494,6 +820,14 @@ onUnmounted(() => {
   padding: 0 !important;
 }
 
+.table-card :deep(.el-table__body tr) {
+  transition: background-color 0.15s ease;
+}
+
+.table-card :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background-color: var(--color-accent-light) !important;
+}
+
 .cell-name {
   display: flex;
   align-items: center;
@@ -522,7 +856,7 @@ onUnmounted(() => {
 }
 
 .cell-host {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-regular);
   background: var(--border-extra-light);
@@ -609,7 +943,7 @@ onUnmounted(() => {
 .card-host {
   font-size: 11px;
   color: var(--text-secondary);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   margin-top: 1px;
 }
 

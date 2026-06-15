@@ -7,7 +7,7 @@
         </svg>
         <span class="chart-title">Activity Overview</span>
       </div>
-      <span class="chart-subtitle">Metric activity over the last 24 hours</span>
+      <span class="chart-subtitle">Servers reporting each hour over the last 24 hours, grouped by status</span>
     </div>
 
     <div v-if="loading" class="chart-loading">
@@ -93,22 +93,22 @@ const chartData = computed(() => ({
   labels: hourlyActivity.value.map(h => h.label),
   datasets: [
     {
-      label: 'Active',
+      label: 'Reporting',
       data: hourlyActivity.value.map(h => h.active),
-      backgroundColor: 'rgba(14, 165, 233, 0.6)',
+      backgroundColor: 'rgba(14, 165, 233, 0.55)',
       borderColor: 'rgba(14, 165, 233, 1)',
       borderWidth: 1,
-      borderRadius: 2,
-      barPercentage: 0.6,
+      borderRadius: 3,
+      barPercentage: 0.7,
     },
     {
-      label: 'Warnings',
+      label: 'Warning',
       data: hourlyActivity.value.map(h => h.warnings),
       backgroundColor: 'rgba(230, 162, 60, 0.6)',
       borderColor: 'rgba(230, 162, 60, 1)',
       borderWidth: 1,
-      borderRadius: 2,
-      barPercentage: 0.6,
+      borderRadius: 3,
+      barPercentage: 0.7,
     },
     {
       label: 'Critical',
@@ -116,8 +116,8 @@ const chartData = computed(() => ({
       backgroundColor: 'rgba(245, 108, 108, 0.6)',
       borderColor: 'rgba(245, 108, 108, 1)',
       borderWidth: 1,
-      borderRadius: 2,
-      barPercentage: 0.6,
+      borderRadius: 3,
+      barPercentage: 0.7,
     },
   ],
 }))
@@ -146,13 +146,23 @@ const chartOptions = {
       bodyColor: '#fff',
       padding: 12,
       cornerRadius: 8,
-      titleFont: { size: 12 },
-      bodyFont: { size: 12 },
+      titleFont: { size: 12, family: "'Plus Jakarta Sans', sans-serif" },
+      bodyFont: { size: 12, family: "'Plus Jakarta Sans', sans-serif" },
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y} server${ctx.parsed.y === 1 ? '' : 's'}`,
+      },
     },
   },
   scales: {
     x: {
       grid: { display: false },
+      title: {
+        display: true,
+        text: 'Time (last 24 hours)',
+        color: '#909399',
+        font: { size: 10, weight: '600' },
+        padding: { top: 6 },
+      },
       ticks: {
         maxTicksLimit: 12,
         color: '#909399',
@@ -162,10 +172,17 @@ const chartOptions = {
     y: {
       beginAtZero: true,
       grid: { color: 'rgba(0,0,0,0.04)' },
+      title: {
+        display: true,
+        text: 'Servers',
+        color: '#909399',
+        font: { size: 10, weight: '600' },
+      },
       ticks: {
         color: '#909399',
         font: { size: 10 },
         precision: 0,
+        stepSize: 1,
       },
     },
   },
