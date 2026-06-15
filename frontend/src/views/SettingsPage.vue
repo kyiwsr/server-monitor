@@ -111,6 +111,10 @@
               <p class="section-desc">Manage users and view system statistics</p>
             </div>
           </div>
+          <el-button type="primary" size="small" @click="openAddUser">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Viewer
+          </el-button>
         </div>
         <el-card shadow="never" class="table-card">
           <el-table v-if="users.length > 0" :data="users" style="width: 100%" size="small" stripe>
@@ -139,6 +143,27 @@
       </section>
     </template>
 
+    <!-- Add Viewer Dialog -->
+    <el-dialog v-model="addUserDialogVisible" title="Add Viewer Account" width="440px">
+      <el-form :model="addUserForm" label-position="top" size="small">
+        <el-form-item label="Name">
+          <el-input v-model="addUserForm.name" placeholder="Full name" />
+        </el-form-item>
+        <el-form-item label="Email">
+          <el-input v-model="addUserForm.email" placeholder="user@example.com" />
+        </el-form-item>
+        <el-form-item label="Password">
+          <el-input v-model="addUserForm.password" type="password" show-password placeholder="Min 6 characters" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="addUserDialogVisible = false">Cancel</el-button>
+        <el-button size="small" type="primary" :loading="addUserSaving" @click="createViewer">
+          {{ addUserSaving ? 'Creating...' : 'Create Viewer' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -153,6 +178,11 @@ const loading = ref(true)
 const error = ref('')
 const successMessage = ref('')
 const profileSaving = ref(false)
+
+// Add viewer dialog
+const addUserDialogVisible = ref(false)
+const addUserSaving = ref(false)
+const addUserForm = ref({ name: '', email: '', password: '' })
 
 // Profile form
 const profileForm = ref({
@@ -198,6 +228,36 @@ async function saveProfile() {
 }
 
 // === Admin ===
+function openAddUser() {
+  addUserForm.value = { name: '', email: '', password: '' }
+  addUserDialogVisible.value = true
+}
+
+async function createViewer() {
+  if (!addUserForm.value.name || !addUserForm.value.email || !addUserForm.value.password) {
+    error.value = 'Name, email, and password are required.'
+    setTimeout(() => { error.value = '' }, 4000)
+    return
+  }
+  addUserSaving.value = true
+  try {
+    await api.createViewer({
+      name: addUserForm.value.name,
+      email: addUserForm.value.email,
+      password: addUserForm.value.password,
+    })
+    addUserDialogVisible.value = false
+    await fetchUsers()
+    successMessage.value = 'Viewer account created successfully'
+    setTimeout(() => { successMessage.value = '' }, 4000)
+  } catch (err) {
+    error.value = err.response?.data?.error || 'Failed to create viewer account'
+    setTimeout(() => { error.value = '' }, 4000)
+  } finally {
+    addUserSaving.value = false
+  }
+}
+
 async function toggleUserStatus(user) {
   try {
     await api.toggleUserStatus(user._id)
@@ -277,7 +337,7 @@ onMounted(async () => {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--gradient-accent);
   color: #fff;
   display: flex;
   align-items: center;

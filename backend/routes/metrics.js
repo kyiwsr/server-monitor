@@ -101,6 +101,20 @@ router.post('/', async (req, res) => {
     matchedServer.status = newStatus;
     await matchedServer.save();
 
+    // Server is reporting again — resolve any active "down" alert immediately
+    // (the downChecker scheduler is the backstop; this makes recovery instant)
+    const activeDownAlert = await Alert.findOne({
+      serverId: matchedServer._id,
+      type: 'down',
+      status: 'active',
+    });
+    if (activeDownAlert) {
+      activeDownAlert.status = 'resolved';
+      activeDownAlert.resolvedAt = new Date();
+      await activeDownAlert.save();
+      console.log(`Down alert resolved (data resumed) for ${matchedServer.name}`);
+    }
+
     console.log(
       `Metrics received from server ${matchedServer.name} | CPU: ${cpuPercent}%, RAM: ${ramPercent}%, Disk: ${diskPercent}% | Status: ${newStatus}`,
     );

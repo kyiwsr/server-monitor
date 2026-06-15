@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Local environment / secrets
+.env
+
+# Logs and runtime output
+*.log
+backend/server-output.txt
+
+# Accidental scratch file
+/c

@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const API_URL = 'http://localhost:3000/api'
+// In Docker, the build sets VITE_API_URL=/api and nginx reverse-proxies /api
+// to the backend container. In local dev (no env var) we hit the backend directly.
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 const apiClient = axios.create({
   baseURL: API_URL,
@@ -89,6 +91,9 @@ export default {
     return apiClient.get('/auth/users')
   },
   toggleUserStatus(userId) {
-    return apiClient.put(`/auth/users/${userId}/toggle-status`)
+    return apiClient.patch(`/auth/users/${userId}/toggle-status`)
+  },
+  createViewer(data) {
+    return apiClient.post('/auth/register-viewer', data)
   },
 }

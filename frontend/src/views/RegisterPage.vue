@@ -202,13 +202,13 @@ const handleRegister = async () => {
   width: 72px;
   height: 72px;
   border-radius: 18px;
-  background: var(--sidebar-logo-bg);
+  background: var(--gradient-accent);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 18px;
-  color: var(--color-accent);
-  box-shadow: 0 0 0 6px var(--color-accent-glow);
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(14, 165, 233, 0.35), 0 0 0 6px var(--color-accent-glow);
 }
 
 .register-header h1 {

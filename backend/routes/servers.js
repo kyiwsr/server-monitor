@@ -312,25 +312,77 @@ router.get('/:id/metrics', async (req, res) => {
     const { id } = req.params;
     const timeRange = req.query.timeRange || '24h';
 
-    const now = new Date();
-    let cutoffTime;
+    // Ownership check — mirror the other server routes so a non-admin cannot
+    // read another user's metric history by guessing the server id (IDOR).
+    const server = await Server.findById(id);
+    if (!server) {
+      return res.status(404).json({ error: 'Server not found.' });
+    }
+    if (
+      req.user.role !== 'admin' &&
+      (!server.createdBy || server.createdBy.toString() !== req.user._id.toString())
+    ) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
 
+    const now = new Date();
+
+    let spanMs;
     const rangeMatch = timeRange.match(/^(\d+)([hd])$/);
     if (rangeMatch) {
       const amount = parseInt(rangeMatch[1]);
       const unit = rangeMatch[2];
-      const ms = unit === 'h' ? amount * 60 * 60 * 1000 : amount * 24 * 60 * 60 * 1000;
-      cutoffTime = new Date(now - ms);
+      spanMs = unit === 'h' ? amount * 60 * 60 * 1000 : amount * 24 * 60 * 60 * 1000;
     } else {
-      cutoffTime = new Date(now - 24 * 60 * 60 * 1000);
+      spanMs = 24 * 60 * 60 * 1000;
+    }
+    const cutoffTime = new Date(now - spanMs);
+    const spanHours = spanMs / (60 * 60 * 1000);
+
+    // Short ranges: return raw samples. Long ranges: downsample with
+    // time-bucketed averages so the chart stays responsive (30d ~= 260k raw points).
+    let bucketMinutes = 0;
+    if (spanHours > 24 * 7) bucketMinutes = 180; // > 7 days -> 3h buckets
+    else if (spanHours > 48) bucketMinutes = 30; // 2–7 days -> 30m buckets
+
+    if (bucketMinutes === 0) {
+      const allMetrics = await Metric.find({
+        serverId: id,
+        timestamp: { $gte: cutoffTime },
+      }).sort({ timestamp: 1 });
+      return res.json(allMetrics);
     }
 
-    const allMetrics = await Metric.find({
-      serverId: id,
-      timestamp: { $gte: cutoffTime },
-    }).sort({ timestamp: 1 });
+    const aggregated = await Metric.aggregate([
+      {
+        $match: {
+          serverId: server._id,
+          timestamp: { $gte: cutoffTime },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateTrunc: { date: '$timestamp', unit: 'minute', binSize: bucketMinutes } },
+          cpuPercent: { $avg: '$cpuPercent' },
+          ramPercent: { $avg: '$ramPercent' },
+          diskPercent: { $avg: '$diskPercent' },
+          uptime: { $max: '$uptime' },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          timestamp: '$_id',
+          cpuPercent: { $round: ['$cpuPercent', 2] },
+          ramPercent: { $round: ['$ramPercent', 2] },
+          diskPercent: { $round: ['$diskPercent', 2] },
+          uptime: 1,
+        },
+      },
+    ]);
 
-    res.json(allMetrics);
+    res.json(aggregated);
   } catch (err) {
     console.error('Error fetching metrics:', err);
     res.status(500).json({ error: 'Server error.' });
