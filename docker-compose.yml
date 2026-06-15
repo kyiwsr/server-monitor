@@ -1,0 +1,56 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - monitor-net
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo:27017/fyp-server-monitor
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      DOWN_CHECK_INTERVAL_SECONDS: ${DOWN_CHECK_INTERVAL_SECONDS:-30}
+      METRIC_RETENTION_DAYS: ${METRIC_RETENTION_DAYS:-30}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      # Exposed so Linux agents on other machines can POST metrics to the backend
+      - "3000:3000"
+    networks:
+      - monitor-net
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    networks:
+      - monitor-net
+
+volumes:
+  mongo-data:
+
+networks:
+  monitor-net:
+    driver: bridge
