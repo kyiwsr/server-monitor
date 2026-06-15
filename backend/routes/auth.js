@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { auth } = require('../middleware/authMiddleware');
+const { auth, adminOnly } = require('../middleware/authMiddleware');
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -149,6 +149,84 @@ router.put('/me', auth, async (req, res) => {
     res.json({ message: 'Profile updated successfully.', user: user.toJSON() });
   } catch (err) {
     console.error('Update profile error:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+/**
+ * GET /api/auth/users
+ * List all users (admin only)
+ */
+router.get('/users', auth, adminOnly, async (req, res) => {
+  try {
+    const users = await User.find().sort({ createdAt: -1 });
+    res.json({ users: users.map((u) => u.toJSON()) });
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+/**
+ * POST /api/auth/register-viewer
+ * Admin creates a new Viewer (read-only) account
+ */
+router.post('/register-viewer', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already registered.' });
+    }
+
+    // Force role to 'user' (Viewer) — admins are not created via this route
+    const user = new User({ name, email, password, role: 'user' });
+    await user.save();
+
+    res.status(201).json({
+      message: 'Viewer account created successfully.',
+      user: user.toJSON(),
+    });
+  } catch (err) {
+    console.error('Error creating viewer:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+/**
+ * PATCH /api/auth/users/:id/toggle-status
+ * Activate / deactivate a user account (admin only)
+ */
+router.patch('/users/:id/toggle-status', auth, adminOnly, async (req, res) => {
+  try {
+    // Prevent an admin from locking themselves out
+    if (req.params.id === req.user._id.toString()) {
+      return res.status(400).json({ error: 'You cannot change your own active status.' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    user.isActive = !user.isActive;
+    await user.save();
+
+    res.json({
+      message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully.`,
+      user: user.toJSON(),
+    });
+  } catch (err) {
+    console.error('Error toggling user status:', err);
     res.status(500).json({ error: 'Server error.' });
   }
 });
