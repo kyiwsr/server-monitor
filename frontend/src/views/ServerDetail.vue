@@ -132,12 +132,22 @@
               </span>
             </div>
           </div>
-          <el-radio-group v-model="timeRange" @change="fetchMetrics" size="small">
-            <el-radio-button label="1h">1H</el-radio-button>
-            <el-radio-button label="6h">6H</el-radio-button>
-            <el-radio-button label="24h">24H</el-radio-button>
-            <el-radio-button label="48h">48H</el-radio-button>
-          </el-radio-group>
+          <div class="chart-controls">
+            <el-radio-group v-model="timeRange" @change="fetchMetrics" size="small">
+              <el-radio-button label="1h">1H</el-radio-button>
+              <el-radio-button label="6h">6H</el-radio-button>
+              <el-radio-button label="24h">24H</el-radio-button>
+              <el-radio-button label="48h">48H</el-radio-button>
+              <el-radio-button label="7d">7D</el-radio-button>
+              <el-radio-button label="30d">30D</el-radio-button>
+            </el-radio-group>
+            <el-button size="small" @click="exportCsv" :disabled="metricsHistory.length === 0" class="export-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export CSV
+            </el-button>
+          </div>
         </div>
         <div class="chart-wrapper" v-if="metricsHistory.length > 0">
           <Line :key="'combined-' + chartKey" :data="combinedChartData" :options="combinedChartOptions" :plugins="combinedThresholdPlugins" />
@@ -500,12 +510,23 @@ const miniChartOptions = {
   },
 }
 
+// Format an x-axis label appropriately for the selected range:
+// multi-day ranges show the date so points aren't ambiguous across days.
+function formatChartLabel(ts) {
+  const d = new Date(ts)
+  if (timeRange.value === '30d') {
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+  }
+  if (timeRange.value === '7d') {
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+      d.toLocaleTimeString([], { hour: '2-digit' })
+  }
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
 // Chart Data
 const combinedChartData = computed(() => ({
-  labels: metricsHistory.value.map((m) => {
-    const d = new Date(m.timestamp)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }),
+  labels: metricsHistory.value.map((m) => formatChartLabel(m.timestamp)),
   datasets: [
     {
       label: 'CPU %',
@@ -541,7 +562,7 @@ const combinedChartData = computed(() => ({
 }))
 
 const cpuChartData = computed(() => ({
-  labels: metricsHistory.value.map((m) => new Date(m.timestamp).toLocaleTimeString()),
+  labels: metricsHistory.value.map((m) => formatChartLabel(m.timestamp)),
   datasets: [{
     label: 'CPU %',
     data: metricsHistory.value.map((m) => m.cpuPercent),
@@ -555,7 +576,7 @@ const cpuChartData = computed(() => ({
 }))
 
 const ramChartData = computed(() => ({
-  labels: metricsHistory.value.map((m) => new Date(m.timestamp).toLocaleTimeString()),
+  labels: metricsHistory.value.map((m) => formatChartLabel(m.timestamp)),
   datasets: [{
     label: 'RAM %',
     data: metricsHistory.value.map((m) => m.ramPercent),
@@ -569,7 +590,7 @@ const ramChartData = computed(() => ({
 }))
 
 const diskChartData = computed(() => ({
-  labels: metricsHistory.value.map((m) => new Date(m.timestamp).toLocaleTimeString()),
+  labels: metricsHistory.value.map((m) => formatChartLabel(m.timestamp)),
   datasets: [{
     label: 'Disk %',
     data: metricsHistory.value.map((m) => m.diskPercent),
@@ -635,6 +656,36 @@ const formatUptime = (seconds) => {
   return `${mins}m`
 }
 
+// Export the currently loaded metrics history as a CSV report (client-side)
+function exportCsv() {
+  const rows = metricsHistory.value
+  if (!rows.length) return
+
+  const header = ['timestamp', 'cpuPercent', 'ramPercent', 'diskPercent', 'uptimeSeconds']
+  const lines = [header.join(',')]
+  for (const m of rows) {
+    lines.push([
+      new Date(m.timestamp).toISOString(),
+      m.cpuPercent ?? '',
+      m.ramPercent ?? '',
+      m.diskPercent ?? '',
+      m.uptime ?? '',
+    ].join(','))
+  }
+
+  const csv = lines.join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  const safeName = (server.value?.name || 'server').replace(/[^a-z0-9-_]+/gi, '_')
+  a.download = `${safeName}_metrics_${timeRange.value}_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 const goBack = () => {
   router.push('/')
 }
@@ -643,7 +694,12 @@ onMounted(async () => {
   await Promise.all([fetchServerInfo(), fetchMetrics()])
   refreshInterval = setInterval(() => {
     fetchServerInfo()
-    fetchMetrics()
+    // Long ranges (7d/30d) are aggregated server-side and barely change between
+    // ticks — only auto-refresh history for the short, raw ranges. Switching
+    // range still fetches once via the radio-group @change handler.
+    if (!['7d', '30d'].includes(timeRange.value)) {
+      fetchMetrics()
+    }
   }, 10000)
 })
 
@@ -938,6 +994,13 @@ onUnmounted(() => {
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+}
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .chart-legend {
