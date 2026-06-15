@@ -29,6 +29,13 @@
           :class="{ 'is-active': isActive(item.route) }"
         >
           <span class="nav-icon" v-html="item.icon"></span>
+          <span
+            v-if="badgeFor(item.route)"
+            class="nav-badge"
+            :class="{ 'nav-badge-alert': item.route === '/alerts' }"
+          >
+            {{ badgeFor(item.route) > 99 ? '99+' : badgeFor(item.route) }}
+          </span>
         </router-link>
       </el-tooltip>
     </nav>
@@ -50,8 +57,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import api from '../services/api'
 
 const props = defineProps({
   collapsed: { type: Boolean, default: false },
@@ -59,6 +67,38 @@ const props = defineProps({
 })
 
 const route = useRoute()
+
+// Live counts for the nav badges (servers total + servers needing attention)
+const serverCount = ref(0)
+const activeAlertCount = ref(0)
+let countsInterval = null
+
+function badgeFor(itemRoute) {
+  if (itemRoute === '/servers') return serverCount.value || null
+  if (itemRoute === '/alerts') return activeAlertCount.value || null
+  return null
+}
+
+async function fetchCounts() {
+  try {
+    const res = await api.getServers()
+    serverCount.value = res.data.length
+    activeAlertCount.value = res.data.filter(
+      (s) => s.status === 'Warning' || s.status === 'Critical'
+    ).length
+  } catch {
+    /* keep last known counts on transient errors */
+  }
+}
+
+onMounted(() => {
+  fetchCounts()
+  countsInterval = setInterval(fetchCounts, 15000)
+})
+
+onUnmounted(() => {
+  if (countsInterval) clearInterval(countsInterval)
+})
 
 const navItems = [
   {
@@ -197,10 +237,36 @@ const isActive = (itemRoute) => {
   left: -10px;
   top: 50%;
   transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
+  width: 4px;
+  height: 26px;
   background: var(--color-accent);
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 10px var(--color-accent);
+}
+
+/* Nav count badges */
+.nav-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--sidebar-bg);
+}
+
+.nav-badge-alert {
+  background: var(--color-critical);
 }
 
 .nav-icon {

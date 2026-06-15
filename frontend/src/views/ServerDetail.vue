@@ -64,10 +64,13 @@
         <el-card shadow="never" class="metric-card" v-for="m in metricCards" :key="m.key">
           <div class="metric-body">
             <div class="metric-top">
-              <div class="metric-icon-wrapper" :style="{ background: m.bgColor }">
-                <span class="metric-icon" v-html="m.icon"></span>
+              <div class="metric-top-left">
+                <div class="metric-icon-wrapper" :style="{ background: m.bgColor }">
+                  <span class="metric-icon" v-html="m.icon"></span>
+                </div>
+                <span class="metric-label">{{ m.label }}</span>
               </div>
-              <span class="metric-label">{{ m.label }}</span>
+              <span class="metric-status-pill" :style="{ background: m.bgColor, color: m.color }">{{ m.statusLabel }}</span>
             </div>
             <div class="metric-value" :style="{ color: m.color }">
               {{ m.value }}<span class="metric-unit">{{ m.unit }}</span>
@@ -137,7 +140,7 @@
           </el-radio-group>
         </div>
         <div class="chart-wrapper" v-if="metricsHistory.length > 0">
-          <Line :key="'combined-' + chartKey" :data="combinedChartData" :options="combinedChartOptions" />
+          <Line :key="'combined-' + chartKey" :data="combinedChartData" :options="combinedChartOptions" :plugins="combinedThresholdPlugins" />
         </div>
         <div class="chart-empty" v-else>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -155,7 +158,7 @@
             <span class="mini-chart-title">CPU Usage</span>
           </div>
           <div class="mini-chart-body" v-if="metricsHistory.length > 0">
-            <Line :key="'cpu-' + chartKey" :data="cpuChartData" :options="miniChartOptions" />
+            <Line :key="'cpu-' + chartKey" :data="cpuChartData" :options="miniChartOptions" :plugins="[thresholdPlugin(thresholds.cpuWarn, thresholds.cpuCrit)]" />
           </div>
           <div class="mini-chart-empty" v-else>
             <span>No data</span>
@@ -167,7 +170,7 @@
             <span class="mini-chart-title">RAM Usage</span>
           </div>
           <div class="mini-chart-body" v-if="metricsHistory.length > 0">
-            <Line :key="'ram-' + chartKey" :data="ramChartData" :options="miniChartOptions" />
+            <Line :key="'ram-' + chartKey" :data="ramChartData" :options="miniChartOptions" :plugins="[thresholdPlugin(thresholds.ramWarn, thresholds.ramCrit)]" />
           </div>
           <div class="mini-chart-empty" v-else>
             <span>No data</span>
@@ -179,7 +182,7 @@
             <span class="mini-chart-title">Disk Usage</span>
           </div>
           <div class="mini-chart-body" v-if="metricsHistory.length > 0">
-            <Line :key="'disk-' + chartKey" :data="diskChartData" :options="miniChartOptions" />
+            <Line :key="'disk-' + chartKey" :data="diskChartData" :options="miniChartOptions" :plugins="[thresholdPlugin(thresholds.diskWarn, thresholds.diskCrit)]" />
           </div>
           <div class="mini-chart-empty" v-else>
             <span>No data</span>
@@ -271,6 +274,57 @@ const THRESHOLDS = {
   diskWarn: 75, diskCrit: 90,
 }
 
+// Use the server's own configured thresholds when available, fall back to defaults
+const thresholds = computed(() => {
+  const t = server.value?.thresholds || {}
+  return {
+    cpuWarn: t.cpuWarn ?? THRESHOLDS.cpuWarn,
+    cpuCrit: t.cpuCrit ?? THRESHOLDS.cpuCrit,
+    ramWarn: t.ramWarn ?? THRESHOLDS.ramWarn,
+    ramCrit: t.ramCrit ?? THRESHOLDS.ramCrit,
+    diskWarn: t.diskWarn ?? THRESHOLDS.diskWarn,
+    diskCrit: t.diskCrit ?? THRESHOLDS.diskCrit,
+  }
+})
+
+// Draws horizontal dashed warning/critical reference lines on a chart
+function thresholdPlugin(warn, crit) {
+  return {
+    id: `thr-${warn}-${crit}`,
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart
+      const yScale = scales.y
+      if (!yScale || !chartArea) return
+      const lines = [
+        { value: warn, color: '#E6A23C', label: `Warning ${warn}%` },
+        { value: crit, color: '#F56C6C', label: `Critical ${crit}%` },
+      ]
+      lines.forEach(({ value, color, label }) => {
+        const y = yScale.getPixelForValue(value)
+        if (y < chartArea.top || y > chartArea.bottom) return
+        ctx.save()
+        ctx.beginPath()
+        ctx.setLineDash([5, 4])
+        ctx.lineWidth = 1.25
+        ctx.strokeStyle = color
+        ctx.moveTo(chartArea.left, y)
+        ctx.lineTo(chartArea.right, y)
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.font = '600 9px "Plus Jakarta Sans", sans-serif'
+        ctx.fillStyle = color
+        ctx.textBaseline = 'bottom'
+        ctx.fillText(label, chartArea.left + 4, y - 2)
+        ctx.restore()
+      })
+    },
+  }
+}
+
+const combinedThresholdPlugins = computed(() => [
+  thresholdPlugin(thresholds.value.cpuWarn, thresholds.value.cpuCrit),
+])
+
 // Track previous metrics for trend
 const prevMetrics = ref(null)
 
@@ -290,6 +344,7 @@ const metricCards = computed(() => {
       percent: m.cpuPercent ?? 0,
       color: getThresholdColor(m.cpuPercent, 'cpu'),
       bgColor: getThresholdBg(m.cpuPercent, 'cpu'),
+      statusLabel: getStatusLabel(m.cpuPercent, 'cpu'),
       trend: getTrend(m.cpuPercent, prev.cpuPercent),
     },
     {
@@ -298,6 +353,7 @@ const metricCards = computed(() => {
       percent: m.ramPercent ?? 0,
       color: getThresholdColor(m.ramPercent, 'ram'),
       bgColor: getThresholdBg(m.ramPercent, 'ram'),
+      statusLabel: getStatusLabel(m.ramPercent, 'ram'),
       trend: getTrend(m.ramPercent, prev.ramPercent),
     },
     {
@@ -306,6 +362,7 @@ const metricCards = computed(() => {
       percent: m.diskPercent ?? 0,
       color: getThresholdColor(m.diskPercent, 'disk'),
       bgColor: getThresholdBg(m.diskPercent, 'disk'),
+      statusLabel: getStatusLabel(m.diskPercent, 'disk'),
       trend: getTrend(m.diskPercent, prev.diskPercent),
     },
   ]
@@ -318,9 +375,8 @@ function getTrend(current, previous) {
 
 function getThresholdColor(value, type) {
   if (value == null) return '#909399'
-  const key = type
-  const warn = THRESHOLDS[`${key}Warn`]
-  const crit = THRESHOLDS[`${key}Crit`]
+  const warn = thresholds.value[`${type}Warn`]
+  const crit = thresholds.value[`${type}Crit`]
   if (value >= crit) return '#F56C6C'
   if (value >= warn) return '#E6A23C'
   return '#67C23A'
@@ -328,12 +384,20 @@ function getThresholdColor(value, type) {
 
 function getThresholdBg(value, type) {
   if (value == null) return '#f4f4f5'
-  const key = type
-  const warn = THRESHOLDS[`${key}Warn`]
-  const crit = THRESHOLDS[`${key}Crit`]
+  const warn = thresholds.value[`${type}Warn`]
+  const crit = thresholds.value[`${type}Crit`]
   if (value >= crit) return '#fef0f0'
   if (value >= warn) return '#fdf6ec'
   return '#f0f9eb'
+}
+
+function getStatusLabel(value, type) {
+  if (value == null) return 'No data'
+  const warn = thresholds.value[`${type}Warn`]
+  const crit = thresholds.value[`${type}Crit`]
+  if (value >= crit) return 'Critical'
+  if (value >= warn) return 'Warning'
+  return 'Normal'
 }
 
 // Alert History derived from metrics
@@ -709,7 +773,7 @@ onUnmounted(() => {
 }
 
 .header-host {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
 .header-sep {
@@ -756,7 +820,25 @@ onUnmounted(() => {
 .metric-top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric-top-left {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.metric-status-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .metric-icon-wrapper {

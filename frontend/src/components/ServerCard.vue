@@ -18,16 +18,25 @@
           </div>
           <div class="card-host">{{ server.host }}</div>
         </div>
-        <div class="card-function-tags" v-if="hasFunctions">
-          <el-tooltip
-            v-for="(fn, idx) in server.businessFunctions"
-            :key="idx"
-            :content="fn"
-            placement="top"
-          >
-            <span class="function-dot" :style="{ background: functionColors[idx % functionColors.length] }"></span>
-          </el-tooltip>
-        </div>
+      </div>
+
+      <!-- Business Function Tags -->
+      <div class="card-functions" v-if="hasFunctions">
+        <span
+          v-for="(fn, idx) in visibleFunctions"
+          :key="idx"
+          class="function-tag"
+          :style="{ background: functionColors[idx % functionColors.length].bg, color: functionColors[idx % functionColors.length].text }"
+        >
+          {{ fn }}
+        </span>
+        <el-tooltip
+          v-if="extraFunctions.length"
+          :content="extraFunctions.join(', ')"
+          placement="top"
+        >
+          <span class="function-tag function-tag-more">+{{ extraFunctions.length }}</span>
+        </el-tooltip>
       </div>
 
       <!-- Metrics -->
@@ -63,6 +72,14 @@
 
       <!-- Footer -->
       <div class="card-footer">
+        <span class="card-uptime" v-if="uptimeDisplay">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <span>Up {{ uptimeDisplay }}</span>
+        </span>
+        <span class="card-uptime card-uptime-muted" v-else>—</span>
         <span class="card-time">{{ timeAgo }}</span>
       </div>
     </div>
@@ -99,7 +116,16 @@ const THRESHOLDS = {
   diskWarn: 75, diskCrit: 90,
 }
 
-const functionColors = ['#0ea5e9', '#8b5cf6', '#f59e0b', '#10b981', '#f43f5e']
+const functionColors = [
+  { bg: '#e0f2fe', text: '#0369a1' },
+  { bg: '#f3e8ff', text: '#7c3aed' },
+  { bg: '#fef3c7', text: '#b45309' },
+  { bg: '#d1fae5', text: '#059669' },
+  { bg: '#fce7f3', text: '#be185d' },
+]
+
+const visibleFunctions = computed(() => (props.server.businessFunctions || []).slice(0, 3))
+const extraFunctions = computed(() => (props.server.businessFunctions || []).slice(3))
 
 const statusClass = computed(() => {
   const status = props.server.status?.toLowerCase() || 'down'
@@ -174,6 +200,17 @@ const timeAgo = computed(() => {
   return `${hours}h ago`
 })
 
+const uptimeDisplay = computed(() => {
+  const seconds = props.server.currentMetrics?.uptime
+  if (seconds == null) return ''
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+})
+
 const handleClick = () => {
   if (props.clickable) {
     emit('click', props.server._id)
@@ -199,10 +236,10 @@ const handleClick = () => {
 }
 
 /* Status border accents */
-.server-card.card-ok { border-left: 3px solid var(--color-ok) !important; }
-.server-card.card-warning { border-left: 3px solid var(--color-warning) !important; }
-.server-card.card-critical { border-left: 3px solid var(--color-critical) !important; }
-.server-card.card-down { border-left: 3px solid var(--color-down) !important; }
+.server-card.card-ok { border-left: 4px solid var(--color-ok) !important; }
+.server-card.card-warning { border-left: 4px solid var(--color-warning) !important; }
+.server-card.card-critical { border-left: 4px solid var(--color-critical) !important; }
+.server-card.card-down { border-left: 4px solid var(--color-down) !important; }
 
 .card-body {
   display: flex;
@@ -243,21 +280,30 @@ const handleClick = () => {
 .card-host {
   font-size: 11px;
   color: var(--text-secondary);
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
 }
 
-.card-function-tags {
+/* Business function tags */
+.card-functions {
   display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-left: 8px;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: -2px;
 }
 
-.function-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
+.function-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.function-tag-more {
+  background: var(--border-extra-light);
+  color: var(--text-secondary);
+  cursor: default;
 }
 
 /* Metrics */
@@ -330,9 +376,29 @@ const handleClick = () => {
 /* Footer */
 .card-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--border-extra-light);
+}
+
+.card-uptime {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.card-uptime svg {
+  color: var(--color-ok);
+  flex-shrink: 0;
+}
+
+.card-uptime-muted {
+  color: var(--text-placeholder);
 }
 
 .card-time {

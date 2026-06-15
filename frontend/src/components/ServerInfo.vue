@@ -53,7 +53,8 @@
           <path d="M18 20V4"/>
           <path d="M6 20v-4"/>
         </svg>
-        <span>Threshold Configuration</span>
+        <span>Alert Thresholds</span>
+        <span class="thresholds-hint">Alerts trigger when usage crosses these limits</span>
       </div>
       <div class="thresholds-grid">
         <div class="threshold-item">
@@ -188,7 +189,7 @@ const timeAgo = computed(() => {
 }
 
 .info-value.mono {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-regular);
 }
@@ -220,6 +221,13 @@ const timeAgo = computed(() => {
 .thresholds-header svg {
   color: var(--color-accent);
   flex-shrink: 0;
+}
+
+.thresholds-hint {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-placeholder);
+  margin-left: 4px;
 }
 
 .thresholds-grid {

@@ -126,10 +126,13 @@
           style="width: 100%"
           size="small"
           stripe
+          :row-class-name="rowClassName"
         >
-          <el-table-column label="Time" min-width="160">
+          <el-table-column label="Time" min-width="150">
             <template #default="{ row }">
-              <span class="cell-time">{{ formatTimestamp(row.triggerAt) }}</span>
+              <el-tooltip :content="formatTimestamp(row.triggerAt)" placement="top" :show-after="300">
+                <span class="cell-time">{{ timeAgo(row.triggerAt) }}</span>
+              </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="Server" min-width="140">
@@ -165,7 +168,7 @@
                 size="small"
                 effect="plain"
               >
-                {{ row.status }}
+                {{ row.status === 'resolved' ? 'Resolved' : 'Active' }}
               </el-tag>
             </template>
           </el-table-column>
@@ -262,6 +265,13 @@ function timeAgo(dateStr) {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   return `${days}d ago`
+}
+
+function rowClassName({ row }) {
+  if (row.status === 'resolved') return 'alert-row alert-row-resolved'
+  return row.severity === 'Critical'
+    ? 'alert-row alert-row-critical'
+    : 'alert-row alert-row-warning'
 }
 
 async function handleResolve(alertId) {
@@ -464,10 +474,32 @@ onMounted(() => {
   padding: 0 !important;
 }
 
+/* Severity left-border on each alert row */
+.table-card :deep(.alert-row td.el-table__cell:first-child) {
+  border-left: 3px solid transparent;
+}
+.table-card :deep(.alert-row-critical td.el-table__cell:first-child) {
+  border-left-color: var(--color-critical);
+}
+.table-card :deep(.alert-row-warning td.el-table__cell:first-child) {
+  border-left-color: var(--color-warning);
+}
+.table-card :deep(.alert-row-resolved td.el-table__cell:first-child) {
+  border-left-color: var(--color-down);
+}
+/* Resolved alerts are muted */
+.table-card :deep(.alert-row-resolved) {
+  opacity: 0.55;
+}
+.table-card :deep(.alert-row-resolved:hover) {
+  opacity: 0.8;
+}
+
 .cell-time {
   font-size: 12px;
   color: var(--text-regular);
   white-space: nowrap;
+  cursor: default;
 }
 
 .cell-server-name {

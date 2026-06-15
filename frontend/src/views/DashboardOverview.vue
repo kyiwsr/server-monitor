@@ -255,8 +255,12 @@
         </template>
         <template #default>
           <div class="empty-content">
-            <h3 class="empty-title">No servers registered</h3>
-            <p class="empty-desc">Add a server to start monitoring your infrastructure</p>
+            <h3 class="empty-title">No servers registered yet</h3>
+            <p class="empty-desc">Add your first server to start monitoring CPU, memory and disk in real time.</p>
+            <el-button type="primary" @click="$router.push('/servers')" class="empty-cta">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add your first server
+            </el-button>
           </div>
         </template>
       </el-empty>
@@ -417,11 +421,11 @@ onUnmounted(() => {
 .stat-info { min-width: 0; }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 34px;
   font-weight: 800;
   color: var(--text-primary);
-  line-height: 1.1;
-  letter-spacing: -0.5px;
+  line-height: 1;
+  letter-spacing: -1px;
 }
 
 .stat-label {
@@ -565,6 +569,12 @@ onUnmounted(() => {
 .empty-desc {
   font-size: 13px;
   color: var(--text-secondary);
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.empty-cta {
+  margin-top: var(--space-md);
 }
 
 /* ===== Responsive ===== */
