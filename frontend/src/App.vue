@@ -123,6 +123,13 @@ const updateTime = () => {
 }
 
 const checkConnection = async () => {
+  // No point pinging a protected endpoint when logged out — and doing so on the
+  // login page would 401 and trigger the auth-redirect, causing a reload loop.
+  if (!authStore.isLoggedIn) {
+    connectionStatus.value = 'disconnected'
+    connectionLabel.value = 'Disconnected'
+    return
+  }
   try {
     const response = await api.getServers()
     if (response.status === 200) {
