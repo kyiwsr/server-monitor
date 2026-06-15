@@ -277,7 +277,7 @@ onMounted(async () => {
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--gradient-accent);
   color: #fff;
   display: flex;
   align-items: center;

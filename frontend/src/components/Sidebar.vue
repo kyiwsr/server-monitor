@@ -155,7 +155,7 @@ const isActive = (itemRoute) => {
   left: 0;
   width: var(--sidebar-width);
   height: 100vh;
-  background: var(--sidebar-bg);
+  background: linear-gradient(180deg, #232740 0%, #15182a 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -184,17 +184,18 @@ const isActive = (itemRoute) => {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-md);
-  background: var(--sidebar-logo-bg);
+  background: var(--gradient-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-accent);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.35);
   transition: var(--transition-fast);
 }
 
 .logo-icon:hover {
-  background: rgba(14, 165, 233, 0.2);
   transform: scale(1.05);
+  filter: brightness(1.06);
 }
 
 /* ===== Navigation ===== */
@@ -239,7 +240,7 @@ const isActive = (itemRoute) => {
   transform: translateY(-50%);
   width: 4px;
   height: 26px;
-  background: var(--color-accent);
+  background: var(--gradient-accent);
   border-radius: 0 4px 4px 0;
   box-shadow: 0 0 10px var(--color-accent);
 }

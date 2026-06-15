@@ -23,7 +23,7 @@
       <div class="stats-grid">
         <el-card
           shadow="never"
-          class="stat-card"
+          class="stat-card stat-card-all"
           :class="{ 'is-active': !activeFilter }"
           @click="activeFilter = null"
         >
@@ -40,12 +40,11 @@
               <div class="stat-label">Total Servers</div>
             </div>
           </div>
-          <div class="stat-gradient stat-gradient-all"></div>
         </el-card>
 
         <el-card
           shadow="never"
-          class="stat-card"
+          class="stat-card stat-card-ok"
           :class="{ 'is-active': activeFilter === 'Ok' }"
           @click="toggleFilter('Ok')"
         >
@@ -61,12 +60,11 @@
               <div class="stat-label">Healthy</div>
             </div>
           </div>
-          <div class="stat-gradient stat-gradient-ok"></div>
         </el-card>
 
         <el-card
           shadow="never"
-          class="stat-card"
+          class="stat-card stat-card-warning"
           :class="{ 'is-active': activeFilter === 'Warning' }"
           @click="toggleFilter('Warning')"
         >
@@ -83,12 +81,11 @@
               <div class="stat-label">Warning</div>
             </div>
           </div>
-          <div class="stat-gradient stat-gradient-warning"></div>
         </el-card>
 
         <el-card
           shadow="never"
-          class="stat-card"
+          class="stat-card stat-card-critical"
           :class="{ 'is-active': activeFilter === 'Critical' }"
           @click="toggleFilter('Critical')"
         >
@@ -105,12 +102,11 @@
               <div class="stat-label">Critical</div>
             </div>
           </div>
-          <div class="stat-gradient stat-gradient-critical"></div>
         </el-card>
 
         <el-card
           shadow="never"
-          class="stat-card"
+          class="stat-card stat-card-down"
           :class="{ 'is-active': activeFilter === 'Down' }"
           @click="toggleFilter('Down')"
         >
@@ -127,7 +123,6 @@
               <div class="stat-label">Offline</div>
             </div>
           </div>
-          <div class="stat-gradient stat-gradient-down"></div>
         </el-card>
       </div>
     </section>
@@ -389,9 +384,30 @@ onUnmounted(() => {
   box-shadow: var(--shadow-lg) !important;
 }
 
-.stat-card.is-active {
+/* Active outline matches each card's status colour */
+.stat-card-all.is-active {
   border-color: var(--color-accent) !important;
   box-shadow: 0 0 0 3px var(--color-accent-glow) !important;
+}
+
+.stat-card-ok.is-active {
+  border-color: var(--color-ok) !important;
+  box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.18) !important;
+}
+
+.stat-card-warning.is-active {
+  border-color: var(--color-warning) !important;
+  box-shadow: 0 0 0 3px rgba(230, 162, 60, 0.18) !important;
+}
+
+.stat-card-critical.is-active {
+  border-color: var(--color-critical) !important;
+  box-shadow: 0 0 0 3px rgba(245, 108, 108, 0.18) !important;
+}
+
+.stat-card-down.is-active {
+  border-color: var(--color-down) !important;
+  box-shadow: 0 0 0 3px rgba(144, 147, 153, 0.18) !important;
 }
 
 .stat-body {
@@ -435,37 +451,6 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 2px;
-}
-
-/* Gradient backgrounds */
-.stat-gradient {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 80px;
-  height: 100%;
-  opacity: 0.06;
-  pointer-events: none;
-}
-
-.stat-gradient-all {
-  background: linear-gradient(135deg, transparent 0%, var(--color-primary) 100%);
-}
-
-.stat-gradient-ok {
-  background: linear-gradient(135deg, transparent 0%, var(--color-ok) 100%);
-}
-
-.stat-gradient-warning {
-  background: linear-gradient(135deg, transparent 0%, var(--color-warning) 100%);
-}
-
-.stat-gradient-critical {
-  background: linear-gradient(135deg, transparent 0%, var(--color-critical) 100%);
-}
-
-.stat-gradient-down {
-  background: linear-gradient(135deg, transparent 0%, var(--color-down) 100%);
 }
 
 /* ===== Loading ===== */

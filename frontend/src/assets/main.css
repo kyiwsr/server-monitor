@@ -21,7 +21,7 @@
   --color-accent-glow: rgba(14, 165, 233, 0.15);
 
   /* UI Colors */
-  --bg-page: #F5F7FA;
+  --bg-page: #F2F5FB;
   --bg-card: #FFFFFF;
   --bg-navbar: #FFFFFF;
   --text-primary: #303133;
@@ -86,7 +86,12 @@
 
   /* Typography */
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Bricolage Grotesque', 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Signature brand gradient (sky -> cyan) */
+  --gradient-accent: linear-gradient(135deg, #0ea5e9 0%, #22d3ee 100%);
+  --gradient-accent-strong: linear-gradient(135deg, #0284c7 0%, #0ea5e9 52%, #22d3ee 100%);
 }
 
 /* ===== Global Reset ===== */
@@ -131,6 +136,26 @@ body,
 .el-progress__text,
 .topbar-time {
   font-variant-numeric: tabular-nums;
+}
+
+/* Display typeface — headlines and headline numbers get character */
+h1,
+h2,
+.page-title,
+.section-title,
+.header-name,
+.chart-title,
+.panel-title,
+.info-title,
+.alert-history-title,
+.login-header h1,
+.register-header h1,
+.empty-title,
+.stat-value,
+.metric-value,
+.uptime-value {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 a {
@@ -242,7 +267,7 @@ a {
 }
 
 .el-radio-button.is-active .el-radio-button__inner {
-  background: var(--color-accent) !important;
+  background: var(--gradient-accent) !important;
   border-color: var(--color-accent) !important;
   color: #fff !important;
   box-shadow: none !important;
@@ -307,12 +332,24 @@ a {
 }
 
 .el-button--primary {
+  background: var(--gradient-accent) !important;
+  border-color: transparent !important;
   box-shadow: 0 2px 6px rgba(14, 165, 233, 0.25) !important;
 }
 
-.el-button--primary:hover {
+.el-button--primary:hover,
+.el-button--primary:focus {
+  background: var(--gradient-accent-strong) !important;
+  border-color: transparent !important;
   box-shadow: 0 4px 12px rgba(14, 165, 233, 0.32) !important;
   transform: translateY(-1px);
+}
+
+/* Text/link buttons must stay flat — undo the gradient for those variants */
+.el-button--primary.is-link,
+.el-button--primary.is-text {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 /* Inputs — consistent focus ring across the app */
