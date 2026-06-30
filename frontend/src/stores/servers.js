@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '../services/api'
+import { useAuthStore } from './auth'
 
 /**
  * Single source of truth for the server list + connection status.
@@ -28,6 +29,13 @@ export const useServersStore = defineStore('servers', () => {
   )
 
   async function refresh() {
+    // No point pinging a protected endpoint when logged out — and doing so on the
+    // login page would 401 and trigger the auth-redirect, causing a reload loop.
+    if (!useAuthStore().isLoggedIn) {
+      connectionStatus.value = 'disconnected'
+      loaded.value = true
+      return
+    }
     try {
       const res = await api.getServers()
       servers.value = res.data
