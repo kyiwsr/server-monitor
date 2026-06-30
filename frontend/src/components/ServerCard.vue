@@ -88,6 +88,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { timeAgo as formatTimeAgo } from '../utils/time'
 
 const props = defineProps({
   server: { type: Object, required: true },
@@ -97,18 +98,20 @@ const props = defineProps({
 
 const emit = defineEmits(['click'])
 
-// For trend tracking – store previous metric values
+// For trend tracking – store the *previous* reading so we can compare against
+// the latest one. Capture the watcher's old value (not the new value, which
+// would always equal the current reading and yield a flat trend of 0).
 const prevMetrics = ref({ cpu: null, ram: null, disk: null })
 
-watch(() => props.server.currentMetrics, (newMetrics) => {
-  if (newMetrics) {
+watch(() => props.server.currentMetrics, (newMetrics, oldMetrics) => {
+  if (oldMetrics) {
     prevMetrics.value = {
-      cpu: newMetrics.cpuPercent ?? null,
-      ram: newMetrics.ramPercent ?? null,
-      disk: newMetrics.diskPercent ?? null,
+      cpu: oldMetrics.cpuPercent ?? null,
+      ram: oldMetrics.ramPercent ?? null,
+      disk: oldMetrics.diskPercent ?? null,
     }
   }
-}, { immediate: true })
+})
 
 const THRESHOLDS = {
   cpuWarn: 70, cpuCrit: 90,
@@ -161,19 +164,19 @@ const metrics = computed(() => {
       key: 'cpu', label: 'CPU', value: m.cpuPercent ?? 0,
       color: getColor(m.cpuPercent, 'cpu'),
       trend: getTrend(m.cpuPercent, prevMetrics.value.cpu),
-      trendClass: m.cpuPercent >= 70 ? 'trend-up' : 'trend-down',
+      trendClass: getTrend(m.cpuPercent, prevMetrics.value.cpu) > 0 ? 'trend-up' : 'trend-down',
     },
     {
       key: 'ram', label: 'RAM', value: m.ramPercent ?? 0,
       color: getColor(m.ramPercent, 'ram'),
       trend: getTrend(m.ramPercent, prevMetrics.value.ram),
-      trendClass: m.ramPercent >= 70 ? 'trend-up' : 'trend-down',
+      trendClass: getTrend(m.ramPercent, prevMetrics.value.ram) > 0 ? 'trend-up' : 'trend-down',
     },
     {
       key: 'disk', label: 'Disk', value: m.diskPercent ?? 0,
       color: getColor(m.diskPercent, 'disk'),
       trend: getTrend(m.diskPercent, prevMetrics.value.disk),
-      trendClass: m.diskPercent >= 75 ? 'trend-up' : 'trend-down',
+      trendClass: getTrend(m.diskPercent, prevMetrics.value.disk) > 0 ? 'trend-up' : 'trend-down',
     },
   ]
 })
@@ -188,17 +191,7 @@ function getColor(value, type) {
   return '#67C23A'
 }
 
-const timeAgo = computed(() => {
-  const dateStr = props.server.lastDataSent
-  if (!dateStr) return 'Never'
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 10) return 'Just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
-})
+const timeAgo = computed(() => formatTimeAgo(props.server.lastDataSent, { emptyText: 'Never' }))
 
 const uptimeDisplay = computed(() => {
   const seconds = props.server.currentMetrics?.uptime

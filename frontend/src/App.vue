@@ -73,19 +73,20 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import api from './services/api'
 import { useAuthStore } from './stores/auth'
+import { useServersStore } from './stores/servers'
 import Sidebar from './components/Sidebar.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const connectionStatus = ref('checking')
-const connectionLabel = ref('Connecting...')
+const serversStore = useServersStore()
+const { connectionStatus, connectionLabel } = storeToRefs(serversStore)
 const currentTime = ref('')
 const serverBreadcrumb = ref('Server Details')
-let healthInterval = null
 let timeInterval = null
 
 const isAuthPage = computed(() =>
@@ -122,46 +123,34 @@ const updateTime = () => {
   currentTime.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-const checkConnection = async () => {
-  try {
-    const response = await api.getServers()
-    if (response.status === 200) {
-      connectionStatus.value = 'connected'
-      connectionLabel.value = 'Connected'
-    }
-  } catch {
-    connectionStatus.value = 'disconnected'
-    connectionLabel.value = 'Disconnected'
-  }
-}
-
 const handleCommand = (command) => {
   if (command === 'settings') {
     router.push('/settings')
   } else if (command === 'logout') {
-    authStore.clearAuth()
+    // Notify the backend, then clear local auth regardless of the result
+    // (the JWT is stateless, so the client session ends either way).
+    api.logout().catch(() => {}).finally(() => authStore.clearAuth())
   }
 }
 
 // Watch route for breadcrumb
 watch(() => route.params.id, (id) => {
   if (id) {
-    api.getServers().then(res => {
-      const server = res.data.find(s => s._id === id)
-      if (server) serverBreadcrumb.value = server.name
+    serverBreadcrumb.value = 'Server Details'
+    api.getServer(id).then(res => {
+      if (res.data?.name) serverBreadcrumb.value = res.data.name
     }).catch(() => {})
   }
 })
 
 onMounted(() => {
-  checkConnection()
+  serversStore.startPolling()
   updateTime()
-  healthInterval = setInterval(checkConnection, 15000)
   timeInterval = setInterval(updateTime, 1000)
 })
 
 onUnmounted(() => {
-  if (healthInterval) clearInterval(healthInterval)
+  serversStore.stopPolling()
   if (timeInterval) clearInterval(timeInterval)
 })
 </script>

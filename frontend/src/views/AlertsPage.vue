@@ -225,6 +225,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '../services/api'
+import { timeAgo as formatTimeAgo } from '../utils/time'
 
 const alerts = ref([])
 const loading = ref(true)
@@ -235,11 +236,17 @@ const dateRange = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
 
-const summary = ref({
-  total: 0,
-  criticalCount: 0,
-  warningCount: 0,
-  resolvedCount: 0,
+// Derive the summary cards from the alerts currently loaded/filtered so the
+// numbers always agree with what the table shows (rather than mixing all-time
+// backend totals with a client-filtered table).
+const summary = computed(() => {
+  const list = alerts.value
+  return {
+    total: list.length,
+    criticalCount: list.filter(a => a.severity === 'Critical').length,
+    warningCount: list.filter(a => a.severity === 'Warning').length,
+    resolvedCount: list.filter(a => a.status === 'resolved').length,
+  }
 })
 
 const paginatedAlerts = computed(() => {
@@ -256,15 +263,7 @@ function formatTimestamp(ts) {
 }
 
 function timeAgo(dateStr) {
-  if (!dateStr) return ''
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  return formatTimeAgo(dateStr, { justNow: false, includeDays: true })
 }
 
 function rowClassName({ row }) {
@@ -307,12 +306,6 @@ const fetchAlerts = async () => {
     }
 
     alerts.value = filtered
-    summary.value = {
-      total: data.total || 0,
-      criticalCount: data.criticalCount || 0,
-      warningCount: data.warningCount || 0,
-      resolvedCount: data.resolvedCount || 0,
-    }
     currentPage.value = 1
     error.value = ''
   } catch (err) {
@@ -423,7 +416,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.stat-icon-all { background: var(--color-primary-light); color: var(--color-primary); }
+.stat-icon-all { background: var(--color-accent-light); color: var(--color-accent); }
 .stat-icon-critical { background: var(--color-critical-light); color: var(--color-critical); }
 .stat-icon-warning { background: var(--color-warning-light); color: var(--color-warning); }
 .stat-icon-resolved { background: var(--color-ok-light); color: var(--color-ok); }

@@ -13,6 +13,10 @@
         <p class="login-subtitle">Sign in to your account</p>
       </div>
 
+      <div v-if="error" class="login-error">
+        <el-alert :title="error" type="error" show-icon :closable="true" @close="error = ''" />
+      </div>
+
       <el-form
         ref="formRef"
         :model="form"
@@ -57,10 +61,6 @@
       <div class="login-footer">
         <span>Don't have an account?</span>
         <router-link to="/register" class="register-link">Create one</router-link>
-      </div>
-
-      <div v-if="error" class="login-error">
-        <el-alert :title="error" type="error" show-icon :closable="true" @close="error = ''" />
       </div>
     </div>
   </div>
@@ -226,6 +226,6 @@ const handleLogin = async () => {
 }
 
 .login-error {
-  margin-top: 16px;
+  margin-bottom: 16px;
 }
 </style>

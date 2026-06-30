@@ -75,6 +75,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { timeAgo } from '../utils/time'
 
 const props = defineProps({
   servers: { type: Array, default: () => [] },
@@ -162,17 +163,6 @@ function buildSummary(status, breached) {
 
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1)
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return ''
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 10) return 'Just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
 }
 </script>
 
