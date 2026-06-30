@@ -65,7 +65,7 @@
           <div class="metric-body">
             <div class="metric-top">
               <div class="metric-top-left">
-                <div class="metric-icon-wrapper" :style="{ background: m.bgColor }">
+                <div class="metric-icon-wrapper" :style="{ background: m.bgColor, color: m.color }">
                   <span class="metric-icon" v-html="m.icon"></span>
                 </div>
                 <span class="metric-label">{{ m.label }}</span>
@@ -262,6 +262,7 @@ import {
 } from 'chart.js'
 import api from '../services/api'
 import ServerInfo from '../components/ServerInfo.vue'
+import { timeAgo } from '../utils/time'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
@@ -335,6 +336,13 @@ const combinedThresholdPlugins = computed(() => [
   thresholdPlugin(thresholds.value.cpuWarn, thresholds.value.cpuCrit),
 ])
 
+// Line-SVG icons for the metric cards (kept consistent with the rest of the app)
+const ICONS = {
+  cpu: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>',
+  ram: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/><line x1="7" y1="10" x2="7" y2="14"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="17" y1="10" x2="17" y2="14"/></svg>',
+  disk: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="12" x2="2" y2="12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><line x1="6" y1="16" x2="6.01" y2="16"/><line x1="10" y1="16" x2="10.01" y2="16"/></svg>',
+}
+
 // Track previous metrics for trend
 const prevMetrics = ref(null)
 
@@ -349,7 +357,7 @@ const metricCards = computed(() => {
   const prev = prevMetrics.value || {}
   return [
     {
-      key: 'cpu', icon: '&#x1F4BB;', label: 'CPU Usage',
+      key: 'cpu', icon: ICONS.cpu, label: 'CPU Usage',
       value: m.cpuPercent ?? '--', unit: '%',
       percent: m.cpuPercent ?? 0,
       color: getThresholdColor(m.cpuPercent, 'cpu'),
@@ -358,7 +366,7 @@ const metricCards = computed(() => {
       trend: getTrend(m.cpuPercent, prev.cpuPercent),
     },
     {
-      key: 'ram', icon: '&#x1F9E0;', label: 'RAM Usage',
+      key: 'ram', icon: ICONS.ram, label: 'RAM Usage',
       value: m.ramPercent ?? '--', unit: '%',
       percent: m.ramPercent ?? 0,
       color: getThresholdColor(m.ramPercent, 'ram'),
@@ -367,7 +375,7 @@ const metricCards = computed(() => {
       trend: getTrend(m.ramPercent, prev.ramPercent),
     },
     {
-      key: 'disk', icon: '&#x1F4BE;', label: 'Disk Usage',
+      key: 'disk', icon: ICONS.disk, label: 'Disk Usage',
       value: m.diskPercent ?? '--', unit: '%',
       percent: m.diskPercent ?? 0,
       color: getThresholdColor(m.diskPercent, 'disk'),
@@ -416,12 +424,13 @@ const alertHistory = computed(() => {
   if (!history || history.length === 0) return []
 
   const alerts = []
+  const t = thresholds.value
 
   for (const point of history) {
     const checks = [
-      { metric: 'CPU', value: point.cpuPercent, warn: THRESHOLDS.cpuWarn, crit: THRESHOLDS.cpuCrit },
-      { metric: 'RAM', value: point.ramPercent, warn: THRESHOLDS.ramWarn, crit: THRESHOLDS.ramCrit },
-      { metric: 'Disk', value: point.diskPercent, warn: THRESHOLDS.diskWarn, crit: THRESHOLDS.diskCrit },
+      { metric: 'CPU', value: point.cpuPercent, warn: t.cpuWarn, crit: t.cpuCrit },
+      { metric: 'RAM', value: point.ramPercent, warn: t.ramWarn, crit: t.ramCrit },
+      { metric: 'Disk', value: point.diskPercent, warn: t.diskWarn, crit: t.diskCrit },
     ]
 
     for (const check of checks) {
@@ -609,18 +618,17 @@ watch(metricsHistory, (newData) => {
 
 const fetchServerInfo = async () => {
   try {
-    const response = await api.getServers()
-    const found = response.data.find((s) => s._id === serverId)
-    if (found) {
-      // Store previous metrics before updating
-      prevMetrics.value = currentMetrics.value
-      server.value = found
-      currentMetrics.value = found.currentMetrics
-    } else {
-      error.value = 'Server not found. It may have been removed.'
-    }
+    const response = await api.getServer(serverId)
+    // Store previous metrics before updating
+    prevMetrics.value = currentMetrics.value
+    server.value = response.data
+    currentMetrics.value = response.data.currentMetrics
   } catch (err) {
-    error.value = 'Unable to fetch server information. Please check the connection.'
+    if (err.response?.status === 404) {
+      error.value = 'Server not found. It may have been removed.'
+    } else {
+      error.value = 'Unable to fetch server information. Please check the connection.'
+    }
     console.error('Error fetching server info:', err)
   }
 }
@@ -634,17 +642,6 @@ const fetchMetrics = async () => {
   } finally {
     loading.value = false
   }
-}
-
-function timeAgo(dateStr) {
-  if (!dateStr) return ''
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 10) return 'Just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  return `${hours}h ago`
 }
 
 const formatUptime = (seconds) => {
@@ -911,6 +908,17 @@ onUnmounted(() => {
 .uptime-icon-wrapper {
   background: var(--color-accent-light);
   color: var(--color-accent);
+}
+
+.metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.metric-icon svg {
+  display: block;
 }
 
 .metric-label {

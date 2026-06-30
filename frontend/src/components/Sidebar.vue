@@ -1,5 +1,5 @@
 <template>
-  <aside class="sidebar" :class="{ 'is-collapsed': collapsed }">
+  <aside class="sidebar">
     <!-- Logo -->
     <div class="sidebar-logo">
       <router-link to="/" class="logo-link">
@@ -43,7 +43,7 @@
     <!-- Bottom Section -->
     <div class="sidebar-bottom">
       <el-tooltip
-        content="Connected"
+        :content="connectionLabel"
         placement="right"
         :show-after="300"
         :hide-after="0"
@@ -57,48 +57,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute } from 'vue-router'
-import api from '../services/api'
+import { useServersStore } from '../stores/servers'
 
 const props = defineProps({
-  collapsed: { type: Boolean, default: false },
   connectionStatus: { type: String, default: 'checking' },
 })
 
 const route = useRoute()
 
-// Live counts for the nav badges (servers total + servers needing attention)
-const serverCount = ref(0)
-const activeAlertCount = ref(0)
-let countsInterval = null
+// Nav badge counts come from the shared servers store (single poll loop)
+const serversStore = useServersStore()
+const { serverCount, activeAlertCount } = storeToRefs(serversStore)
+
+const connectionLabel = computed(() => {
+  const map = { connected: 'Connected', disconnected: 'Disconnected', checking: 'Connecting...' }
+  return map[props.connectionStatus] || 'Connecting...'
+})
 
 function badgeFor(itemRoute) {
   if (itemRoute === '/servers') return serverCount.value || null
   if (itemRoute === '/alerts') return activeAlertCount.value || null
   return null
 }
-
-async function fetchCounts() {
-  try {
-    const res = await api.getServers()
-    serverCount.value = res.data.length
-    activeAlertCount.value = res.data.filter(
-      (s) => s.status === 'Warning' || s.status === 'Critical'
-    ).length
-  } catch {
-    /* keep last known counts on transient errors */
-  }
-}
-
-onMounted(() => {
-  fetchCounts()
-  countsInterval = setInterval(fetchCounts, 15000)
-})
-
-onUnmounted(() => {
-  if (countsInterval) clearInterval(countsInterval)
-})
 
 const navItems = [
   {

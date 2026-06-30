@@ -78,6 +78,9 @@
               <el-form-item label="New Password">
                 <el-input v-model="profileForm.newPassword" type="password" show-password placeholder="Min 6 characters" />
               </el-form-item>
+              <el-form-item label="Confirm New Password">
+                <el-input v-model="profileForm.confirmPassword" type="password" show-password placeholder="Re-enter new password" />
+              </el-form-item>
             </div>
             <div class="profile-divider">
               <span>Preferences</span>
@@ -190,6 +193,7 @@ const profileForm = ref({
   email: '',
   currentPassword: '',
   newPassword: '',
+  confirmPassword: '',
   emailNotifications: true,
 })
 
@@ -202,6 +206,28 @@ function formatTimestamp(ts) {
 
 // === Profile ===
 async function saveProfile() {
+  const { currentPassword, newPassword, confirmPassword } = profileForm.value
+  const changingPassword = currentPassword || newPassword || confirmPassword
+
+  // Validate password change client-side before hitting the API
+  if (changingPassword) {
+    if (!currentPassword) {
+      error.value = 'Enter your current password to change it.'
+      setTimeout(() => { error.value = '' }, 4000)
+      return
+    }
+    if (newPassword.length < 6) {
+      error.value = 'New password must be at least 6 characters.'
+      setTimeout(() => { error.value = '' }, 4000)
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      error.value = 'New password and confirmation do not match.'
+      setTimeout(() => { error.value = '' }, 4000)
+      return
+    }
+  }
+
   profileSaving.value = true
   try {
     const data = {
@@ -209,15 +235,16 @@ async function saveProfile() {
       email: profileForm.value.email,
       emailNotifications: profileForm.value.emailNotifications,
     }
-    if (profileForm.value.currentPassword && profileForm.value.newPassword) {
-      data.currentPassword = profileForm.value.currentPassword
-      data.newPassword = profileForm.value.newPassword
+    if (changingPassword) {
+      data.currentPassword = currentPassword
+      data.newPassword = newPassword
     }
     const response = await api.updateProfile(data)
     authStore.updateUser(response.data.user)
     successMessage.value = 'Profile updated successfully'
     profileForm.value.currentPassword = ''
     profileForm.value.newPassword = ''
+    profileForm.value.confirmPassword = ''
     setTimeout(() => { successMessage.value = '' }, 4000)
   } catch (err) {
     error.value = err.response?.data?.error || 'Failed to update profile'

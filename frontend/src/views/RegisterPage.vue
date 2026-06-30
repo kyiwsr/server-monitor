@@ -13,6 +13,10 @@
         <p class="register-subtitle">Register for Server Monitor</p>
       </div>
 
+      <div v-if="error" class="register-error">
+        <el-alert :title="error" type="error" show-icon :closable="true" @close="error = ''" />
+      </div>
+
       <el-form
         ref="formRef"
         :model="form"
@@ -77,10 +81,6 @@
       <div class="register-footer">
         <span>Already have an account?</span>
         <router-link to="/login" class="login-link">Sign in</router-link>
-      </div>
-
-      <div v-if="error" class="register-error">
-        <el-alert :title="error" type="error" show-icon :closable="true" @close="error = ''" />
       </div>
     </div>
   </div>
@@ -263,6 +263,6 @@ const handleRegister = async () => {
 }
 
 .register-error {
-  margin-top: 16px;
+  margin-bottom: 16px;
 }
 </style>

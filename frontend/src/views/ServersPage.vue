@@ -299,11 +299,11 @@
 
     <!-- Add Server Dialog -->
     <el-dialog v-model="addDialogVisible" title="Add New Server" width="500px" :close-on-click-modal="false">
-      <el-form :model="addForm" label-position="top" size="small">
-        <el-form-item label="Server Name" required>
+      <el-form ref="addFormRef" :model="addForm" :rules="serverRules" label-position="top" size="small">
+        <el-form-item label="Server Name" prop="name">
           <el-input v-model="addForm.name" placeholder="e.g. Production Web Server" />
         </el-form-item>
-        <el-form-item label="Host/IP" required>
+        <el-form-item label="Host/IP" prop="host">
           <el-input v-model="addForm.host" placeholder="e.g. 192.168.1.100 or server.example.com" />
         </el-form-item>
         <el-form-item label="Description">
@@ -364,11 +364,11 @@
 
     <!-- Edit Server Dialog -->
     <el-dialog v-model="editDialogVisible" :title="'Edit Server: ' + (editForm?.name || '')" width="550px" :close-on-click-modal="false" class="edit-dialog">
-      <el-form v-if="editForm" :model="editForm" label-position="top" size="small" class="edit-form">
-        <el-form-item label="Server Name">
+      <el-form ref="editFormRef" v-if="editForm" :model="editForm" :rules="serverRules" label-position="top" size="small" class="edit-form">
+        <el-form-item label="Server Name" prop="name">
           <el-input v-model="editForm.name" placeholder="Enter server name" />
         </el-form-item>
-        <el-form-item label="Host">
+        <el-form-item label="Host" prop="host">
           <el-input v-model="editForm.host" placeholder="Enter host/IP" />
         </el-form-item>
         <el-form-item label="Description">
@@ -410,10 +410,15 @@
         </div>
       </el-form>
       <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="editDialogVisible = false">Cancel</el-button>
-          <el-button type="primary" @click="saveServer" :loading="saving">{{ saving ? 'Saving...' : 'Save' }}</el-button>
-        </span>
+        <div class="dialog-footer dialog-footer-split">
+          <el-button type="warning" plain :loading="regenerating" @click="handleRegenerateToken">
+            {{ regenerating ? 'Regenerating...' : 'Regenerate Token' }}
+          </el-button>
+          <span>
+            <el-button @click="editDialogVisible = false">Cancel</el-button>
+            <el-button type="primary" @click="saveServer" :loading="saving">{{ saving ? 'Saving...' : 'Save' }}</el-button>
+          </span>
+        </div>
       </template>
     </el-dialog>
 
@@ -439,22 +444,33 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import api from '../services/api'
+import { useServersStore } from '../stores/servers'
 
 const router = useRouter()
-const servers = ref([])
+const serversStore = useServersStore()
+const { servers, loaded } = storeToRefs(serversStore)
 const searchQuery = ref('')
 const statusFilter = ref('')
 const viewMode = ref('table') // 'table' | 'cards'
-const loading = ref(true)
+const loading = computed(() => !loaded.value)
 const error = ref('')
 const successMessage = ref('')
-let refreshInterval = null
+
+// Shared validation rules for the add/edit server forms
+const serverRules = {
+  name: [{ required: true, message: 'Server name is required', trigger: 'blur' }],
+  host: [{ required: true, message: 'Host/IP is required', trigger: 'blur' }],
+}
 
 // Server management dialogs
+const addFormRef = ref(null)
+const editFormRef = ref(null)
 const addDialogVisible = ref(false)
 const addSaving = ref(false)
 const addForm = ref({
@@ -477,6 +493,7 @@ const editDialogVisible = ref(false)
 const editForm = ref(null)
 const editServerId = ref(null)
 const saving = ref(false)
+const regenerating = ref(false)
 
 const deleteDialogVisible = ref(false)
 const deleteServerId = ref(null)
@@ -547,14 +564,13 @@ function goToServer(id) {
 function openAddServerDialog() {
   addForm.value = { name: '', host: '', description: '', businessFunctions: [], tags: [], timezone: 'UTC' }
   addDialogVisible.value = true
+  nextTick(() => addFormRef.value?.clearValidate())
 }
 
 async function saveNewServer() {
-  if (!addForm.value.name || !addForm.value.host) {
-    error.value = 'Server name and host are required'
-    setTimeout(() => { error.value = '' }, 3000)
-    return
-  }
+  if (!addFormRef.value) return
+  const valid = await addFormRef.value.validate().catch(() => false)
+  if (!valid) return
   addSaving.value = true
   try {
     const response = await api.createServer(addForm.value)
@@ -564,7 +580,7 @@ async function saveNewServer() {
     addDialogVisible.value = false
     tokenDialogVisible.value = true
     successMessage.value = 'Server created successfully'
-    await fetchServers()
+    await serversStore.refresh()
     setTimeout(() => { successMessage.value = '' }, 4000)
   } catch (err) {
     error.value = 'Failed to create server'
@@ -610,16 +626,20 @@ function openEditDialog(server) {
     },
   }
   editDialogVisible.value = true
+  nextTick(() => editFormRef.value?.clearValidate())
 }
 
 async function saveServer() {
   if (!editForm.value || !editServerId.value) return
+  if (!editFormRef.value) return
+  const valid = await editFormRef.value.validate().catch(() => false)
+  if (!valid) return
   saving.value = true
   try {
     await api.updateServer(editServerId.value, editForm.value)
     editDialogVisible.value = false
     successMessage.value = 'Server settings updated successfully'
-    await fetchServers()
+    await serversStore.refresh()
     setTimeout(() => { successMessage.value = '' }, 4000)
   } catch (err) {
     error.value = 'Failed to update server settings'
@@ -627,6 +647,34 @@ async function saveServer() {
     setTimeout(() => { error.value = '' }, 4000)
   } finally {
     saving.value = false
+  }
+}
+
+async function handleRegenerateToken() {
+  if (!editServerId.value) return
+  try {
+    await ElMessageBox.confirm(
+      'Regenerating the token immediately invalidates the current one. The agent on this server must be updated with the new token to keep reporting.',
+      'Regenerate Token',
+      { confirmButtonText: 'Regenerate', cancelButtonText: 'Cancel', type: 'warning' },
+    )
+  } catch {
+    return // user cancelled
+  }
+  regenerating.value = true
+  try {
+    const response = await api.regenerateToken(editServerId.value)
+    newToken.value = response.data.token
+    regeneratedServerName.value = editForm.value?.name || ''
+    isNewServer.value = false
+    editDialogVisible.value = false
+    tokenDialogVisible.value = true
+  } catch (err) {
+    error.value = 'Failed to regenerate token'
+    console.error('Error regenerating token:', err)
+    setTimeout(() => { error.value = '' }, 4000)
+  } finally {
+    regenerating.value = false
   }
 }
 
@@ -643,7 +691,7 @@ async function handleDelete() {
     await api.deleteServer(deleteServerId.value)
     deleteDialogVisible.value = false
     successMessage.value = 'Server deleted successfully'
-    await fetchServers()
+    await serversStore.refresh()
     setTimeout(() => { successMessage.value = '' }, 4000)
   } catch (err) {
     error.value = 'Failed to delete server'
@@ -654,26 +702,10 @@ async function handleDelete() {
   }
 }
 
-const fetchServers = async () => {
-  try {
-    const response = await api.getServers()
-    servers.value = response.data
-    error.value = ''
-  } catch (err) {
-    error.value = 'Unable to connect to the server. Please check if the backend is running.'
-    console.error('Error fetching servers:', err)
-  } finally {
-    loading.value = false
-  }
-}
-
 onMounted(() => {
-  fetchServers()
-  refreshInterval = setInterval(fetchServers, 10000)
-})
-
-onUnmounted(() => {
-  if (refreshInterval) clearInterval(refreshInterval)
+  // Reads come from the shared store (App drives the poll loop); refresh once
+  // on entry so the list reflects the latest state immediately.
+  serversStore.refresh()
 })
 </script>
 
@@ -1013,6 +1045,13 @@ onUnmounted(() => {
 .empty-desc {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.dialog-footer-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 /* ===== Responsive ===== */

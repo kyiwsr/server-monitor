@@ -157,6 +157,15 @@
             <el-tag size="small" effect="plain" type="info">{{ filteredServers.length }}</el-tag>
           </div>
 
+          <!-- No-match State (filter active, nothing matches) -->
+          <div v-if="filteredServers.length === 0" class="filter-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <p class="filter-empty-text">No servers match this filter</p>
+            <el-button size="small" @click="activeFilter = null">Clear filter</el-button>
+          </div>
+
           <!-- Critical Section -->
           <section v-if="criticalServers.length > 0" class="server-group">
             <div class="group-header">
@@ -264,19 +273,28 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import api from '../services/api'
+import { useServersStore } from '../stores/servers'
 import ServerCard from '../components/ServerCard.vue'
 import AlertPanel from '../components/AlertPanel.vue'
 import ActivityChart from '../components/ActivityChart.vue'
 
 const router = useRouter()
-const servers = ref([])
+const serversStore = useServersStore()
+const { servers, loaded, hasError } = storeToRefs(serversStore)
 const activeFilter = ref(null)
-const loading = ref(true)
+
+// Loading shows until the shared store has completed its first fetch
+const loading = computed(() => !loaded.value)
+
+// Local, dismissable mirror of the store's connection error
 const error = ref('')
-let refreshInterval = null
+watch(hasError, (failed) => {
+  if (failed) error.value = 'Unable to connect to the server. Please check if the backend is running.'
+  else error.value = ''
+}, { immediate: true })
 
 const okCount = computed(() => servers.value.filter(s => s.status === 'Ok').length)
 const warningCount = computed(() => servers.value.filter(s => s.status === 'Warning').length)
@@ -308,28 +326,6 @@ const toggleFilter = (status) => {
 const goToServerDetail = (serverId) => {
   router.push(`/server/${serverId}`)
 }
-
-const fetchServers = async () => {
-  try {
-    const response = await api.getServers()
-    servers.value = response.data
-    error.value = ''
-  } catch (err) {
-    error.value = 'Unable to connect to the server. Please check if the backend is running.'
-    console.error('Error fetching servers:', err)
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  fetchServers()
-  refreshInterval = setInterval(fetchServers, 10000)
-})
-
-onUnmounted(() => {
-  if (refreshInterval) clearInterval(refreshInterval)
-})
 </script>
 
 <style scoped>
@@ -428,7 +424,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.stat-icon-all { background: var(--color-primary-light); color: var(--color-primary); }
+.stat-icon-all { background: var(--color-accent-light); color: var(--color-accent); }
 .stat-icon-ok { background: var(--color-ok-light); color: var(--color-ok); }
 .stat-icon-warning { background: var(--color-warning-light); color: var(--color-warning); }
 .stat-icon-critical { background: var(--color-critical-light); color: var(--color-critical); }
@@ -496,6 +492,29 @@ onUnmounted(() => {
 
 .main-right {
   min-width: 0;
+}
+
+/* ===== Filter Empty State ===== */
+.filter-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: var(--space-2xl) 0;
+  text-align: center;
+}
+
+.filter-empty svg {
+  color: var(--text-placeholder);
+  opacity: 0.5;
+}
+
+.filter-empty-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
 /* ===== Server Groups ===== */
