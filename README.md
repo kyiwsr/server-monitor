@@ -119,4 +119,26 @@ npm run dev      # http://localhost:5173 (calls http://localhost:3000/api by def
 | `JWT_SECRET` | Secret for signing auth tokens | — |
 | `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` | SMTP for alert emails (optional) | — |
 | `DOWN_CHECK_INTERVAL_SECONDS` | How often to scan for unreachable servers | `30` |
-| `METRIC_RETENTION_DAYS` | Auto-delete metrics older than this (MongoD
+| `METRIC_RETENTION_DAYS` | Auto-delete metrics older than this (MongoDB TTL) | `30` |
+
+## Roles & Access Control
+
+The system uses a two-role model enforced via JWT + middleware:
+
+| Role (`user.role`) | Shown in UI as | Capabilities |
+|--------------------|----------------|--------------|
+| `admin` | Administrator | Full access: sees **all** servers and alerts; manages users (list, create viewers, activate/deactivate). |
+| `user` | Viewer / Member | Sees and manages **only the servers they created** (ownership-scoped); receives alerts for those servers. |
+
+**Implementation note (ownership vs. pure read-only):** The original proposal framed the
+Viewer as strictly read-only. The implemented model is an **ownership-scoped** model: a
+non-admin (`user`) can register and manage their own servers but cannot see other users'
+servers, and cannot access admin user-management. This was chosen so a small team can
+self-serve their own servers without an admin gatekeeping every change, while admins retain
+a full cross-tenant view. Access is enforced server-side:
+
+- `adminOnly` middleware guards all `/api/auth/users*` routes (403 for non-admins).
+- Server/alert routes filter by `createdBy` for non-admins (you only ever see your own).
+
+To make Viewers strictly read-only instead, gate the server write routes
+(`POST/PUT/DELETE /api/servers`) behind `adminOnly` — the middleware already exists.

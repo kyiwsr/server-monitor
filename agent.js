@@ -209,4 +209,199 @@ function collectMetrics() {
     return {
       cpuPercent: Math.round(cpuPercent * 100) / 100,
       ramPercent: Math.round(ramPercent * 100) / 100,
- 
+      diskPercent: Math.round(diskPercent * 100) / 100,
+      uptimeSeconds,
+    };
+  } catch (err) {
+    console.error(`[${CONFIG.SERVER_NAME}] Error collecting metrics:`, err.message);
+    return null;
+  }
+}
+
+/**
+ * Send metrics to the backend server
+ */
+function sendMetrics(metrics) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify({
+      token: CONFIG.AGENT_TOKEN,
+      timestamp: new Date().toISOString(),
+      cpuPercent: metrics.cpuPercent,
+      ramPercent: metrics.ramPercent,
+      diskPercent: metrics.diskPercent,
+      uptimeSeconds: metrics.uptimeSeconds,
+    });
+
+    const url = new URL(CONFIG.BACKEND_URL);
+    const isHttps = url.protocol === 'https:';
+    const transport = isHttps ? https : http;
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data),
+      },
+      timeout: 10000,
+    };
+
+    const req = transport.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          console.log(
+            `[${CONFIG.SERVER_NAME}] Sent: CPU=${metrics.cpuPercent}% | RAM=${metrics.ramPercent}% | Disk=${metrics.diskPercent}% | Uptime=${metrics.uptimeSeconds}s`
+          );
+          resolve(body);
+        } else {
+          console.error(
+            `[${CONFIG.SERVER_NAME}] Server returned status ${res.statusCode}: ${body}`
+          );
+          reject(new Error(`HTTP ${res.statusCode}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error(`[${CONFIG.SERVER_NAME}] Connection error:`, err.message);
+      reject(err);
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      console.error(`[${CONFIG.SERVER_NAME}] Request timed out`);
+      reject(new Error('Timeout'));
+    });
+
+    req.write(data);
+    req.end();
+  });
+}
+
+/**
+ * Main loop
+ */
+async function main() {
+  console.log('========================================');
+  console.log(`  Server Monitor Agent`);
+  console.log(`  Server: ${CONFIG.SERVER_NAME}`);
+  console.log(`  Backend: ${CONFIG.BACKEND_URL}`);
+  console.log(`  Interval: ${CONFIG.INTERVAL_SECONDS}s`);
+  console.log('========================================');
+  console.log('');
+
+  // Test backend connectivity first
+  console.log(`[${CONFIG.SERVER_NAME}] Testing backend connectivity...`);
+  try {
+    const testMetrics = {
+      cpuPercent: 0,
+      ramPercent: 0,
+      diskPercent: 0,
+      uptimeSeconds: 0,
+    };
+    await sendMetrics(testMetrics);
+    console.log(`[${CONFIG.SERVER_NAME}] Backend connection OK!`);
+  } catch (err) {
+    console.warn(
+      `[${CONFIG.SERVER_NAME}] Warning: Could not reach backend. Will retry...`
+    );
+  }
+
+  console.log(`[${CONFIG.SERVER_NAME}] Starting monitoring loop...`);
+  console.log('');
+
+  // Continuous monitoring loop
+  const runCycle = async () => {
+    try {
+      const metrics = collectMetrics();
+      if (metrics) {
+        await sendMetrics(metrics);
+      }
+    } catch (err) {
+      // Error already logged, just continue
+    }
+  };
+
+  // Run immediately, then on interval
+  await runCycle();
+  setInterval(runCycle, CONFIG.INTERVAL_SECONDS * 1000);
+}
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  console.log(`\n[${CONFIG.SERVER_NAME}] Agent stopped by user`);
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log(`\n[${CONFIG.SERVER_NAME}] Agent terminated`);
+  process.exit(0);
+});
+
+// Uncaught exceptions should not crash the process
+process.on('uncaughtException', (err) => {
+  console.error(`[${CONFIG.SERVER_NAME}] Uncaught exception:`, err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error(`[${CONFIG.SERVER_NAME}] Unhandled rejection:`, reason);
+});
+
+// Start
+main();
+
+/**
+ * SYSTEMD SERVICE SETUP (for auto-start on boot)
+ * ==============================================
+ *
+ * Config is environment-driven. With systemd you have two options: inline
+ * Environment= directives, or an EnvironmentFile= that holds the KEY=VALUE pairs.
+ *
+ * Create file: /etc/systemd/system/server-monitor-agent.service
+ *
+ * --- Option A: inline Environment= directives ---
+ *
+ * [Unit]
+ * Description=Server Monitor Agent
+ * After=network.target
+ *
+ * [Service]
+ * Type=simple
+ * User=root
+ * Environment=BACKEND_URL=http://<host-ip>:3000/api/metrics
+ * Environment=AGENT_TOKEN=<your-agent-token>
+ * # Optional:
+ * Environment=SERVER_NAME=my-web-server
+ * Environment=INTERVAL_SECONDS=10
+ * ExecStart=/usr/bin/node /path/to/agent.js
+ * Restart=always
+ * RestartSec=10
+ *
+ * [Install]
+ * WantedBy=multi-user.target
+ *
+ * --- Option B: EnvironmentFile= (keeps the token out of the unit file) ---
+ *
+ * Create /etc/server-monitor-agent.env (chmod 600, root-owned):
+ *   BACKEND_URL=http://<host-ip>:3000/api/metrics
+ *   AGENT_TOKEN=<your-agent-token>
+ *   # SERVER_NAME=my-web-server
+ *   # INTERVAL_SECONDS=10
+ *
+ * Then in the [Service] section use:
+ *   EnvironmentFile=/etc/server-monitor-agent.env
+ *   ExecStart=/usr/bin/node /path/to/agent.js
+ *
+ * (You can also skip systemd env entirely and drop an agent.config.env /
+ *  agent.config.json file next to agent.js — the agent reads it automatically.)
+ *
+ * Then run:
+ *   sudo systemctl daemon-reload
+ *   sudo systemctl enable server-monitor-agent
+ *   sudo systemctl start server-monitor-agent
+ *   sudo systemctl status server-monitor-agent
+ */

@@ -10,3 +10,9 @@ backend/server-output.txt
 
 # Accidental scratch file
 /c
+
+# Claude local agents/settings (keep local, do not push)
+.claude/
+
+# Project documents (keep local, do not push)
+docs/
