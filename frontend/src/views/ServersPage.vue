@@ -356,6 +356,23 @@
           <code class="token-value">{{ newToken }}</code>
           <el-button size="small" type="primary" @click="copyToken" class="copy-btn">{{ tokenCopied ? 'Copied!' : 'Copy' }}</el-button>
         </div>
+
+        <!-- One-line agent install command (token already baked in) -->
+        <div class="install-section" v-if="newInstallCommand">
+          <div class="install-header">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            <span class="install-title">Install the monitoring agent</span>
+          </div>
+          <p class="install-help">
+            Run this on the server you want to monitor. It installs and starts the agent automatically — no config file editing needed.
+          </p>
+          <div class="install-command-box">
+            <code class="install-command-value">{{ newInstallCommand }}</code>
+            <el-button size="small" type="primary" @click="copyInstallCommand" class="copy-btn">{{ installCopied ? 'Copied!' : 'Copy' }}</el-button>
+          </div>
+        </div>
       </div>
       <template #footer>
         <el-button type="primary" @click="tokenDialogVisible = false">I've Saved the Token</el-button>
@@ -484,10 +501,12 @@ const addForm = ref({
 
 const tokenDialogVisible = ref(false)
 const newToken = ref('')
+const newInstallCommand = ref('')
 const newServerName = ref('')
 const regeneratedServerName = ref('')
 const isNewServer = ref(false)
 const tokenCopied = ref(false)
+const installCopied = ref(false)
 
 const editDialogVisible = ref(false)
 const editForm = ref(null)
@@ -575,6 +594,7 @@ async function saveNewServer() {
   try {
     const response = await api.createServer(addForm.value)
     newToken.value = response.data.token
+    newInstallCommand.value = response.data.installCommand || ''
     newServerName.value = response.data.server.name
     isNewServer.value = true
     addDialogVisible.value = false
@@ -591,20 +611,31 @@ async function saveNewServer() {
   }
 }
 
-function copyToken() {
-  navigator.clipboard.writeText(newToken.value).then(() => {
-    tokenCopied.value = true
-    setTimeout(() => { tokenCopied.value = false }, 2000)
-  }).catch(() => {
+// Copy `text` to the clipboard, falling back to execCommand when the async
+// Clipboard API is unavailable (e.g. non-secure contexts), then flag `flagRef`
+// for a short "Copied!" confirmation.
+function copyToClipboard(text, flagRef) {
+  const flash = () => {
+    flagRef.value = true
+    setTimeout(() => { flagRef.value = false }, 2000)
+  }
+  navigator.clipboard.writeText(text).then(flash).catch(() => {
     const textarea = document.createElement('textarea')
-    textarea.value = newToken.value
+    textarea.value = text
     document.body.appendChild(textarea)
     textarea.select()
     document.execCommand('copy')
     document.body.removeChild(textarea)
-    tokenCopied.value = true
-    setTimeout(() => { tokenCopied.value = false }, 2000)
+    flash()
   })
+}
+
+function copyToken() {
+  copyToClipboard(newToken.value, tokenCopied)
+}
+
+function copyInstallCommand() {
+  copyToClipboard(newInstallCommand.value, installCopied)
 }
 
 function openEditDialog(server) {
@@ -665,6 +696,7 @@ async function handleRegenerateToken() {
   try {
     const response = await api.regenerateToken(editServerId.value)
     newToken.value = response.data.token
+    newInstallCommand.value = response.data.installCommand || ''
     regeneratedServerName.value = editForm.value?.name || ''
     isNewServer.value = false
     editDialogVisible.value = false
@@ -1052,6 +1084,63 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* ===== Install Command (token dialog) ===== */
+.install-section {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border-extra-light);
+}
+
+.install-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.install-header svg {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.install-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.install-help {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.install-command-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.install-command-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-all;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.install-command-box .copy-btn {
+  flex-shrink: 0;
 }
 
 /* ===== Responsive ===== */

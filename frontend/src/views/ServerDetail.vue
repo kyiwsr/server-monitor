@@ -115,6 +115,37 @@
       <!-- Server Info -->
       <ServerInfo :server="server" />
 
+      <!-- Agent Setup / Re-install -->
+      <el-card shadow="never" class="agent-setup-card" v-if="server.installCommand">
+        <div class="agent-setup-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <h2 class="agent-setup-title">Agent Setup</h2>
+        </div>
+        <p class="agent-setup-help">
+          Run this on the server you want to monitor to install and start the agent automatically.
+        </p>
+        <div class="install-command-box">
+          <code class="install-command-value">{{ server.installCommand }}</code>
+          <el-button size="small" type="primary" @click="copyInstallCommand" class="copy-btn">{{ installCopied ? 'Copied!' : 'Copy' }}</el-button>
+        </div>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          class="agent-setup-note"
+        >
+          <template #title>
+            <span class="agent-setup-note-text">
+              The token above is shown as <code>&lt;AGENT_TOKEN&gt;</code> for security — the real token cannot be recovered after creation.
+              Replace it with the token you saved when this server was created, or
+              <strong>regenerate a new one</strong> from the server list (Edit → Regenerate Token) to get a ready-to-run command.
+            </span>
+          </template>
+        </el-alert>
+      </el-card>
+
       <!-- Combined Chart -->
       <el-card shadow="never" class="chart-card">
         <div class="chart-header">
@@ -277,6 +308,7 @@ const timeRange = ref('1h')
 const chartKey = ref(0)
 const loading = ref(true)
 const error = ref('')
+const installCopied = ref(false)
 let refreshInterval = null
 
 const THRESHOLDS = {
@@ -681,6 +713,26 @@ function exportCsv() {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+// Copy the placeholder install command, falling back to execCommand when the
+// async Clipboard API isn't available (e.g. non-secure contexts).
+function copyInstallCommand() {
+  const text = server.value?.installCommand || ''
+  if (!text) return
+  const flash = () => {
+    installCopied.value = true
+    setTimeout(() => { installCopied.value = false }, 2000)
+  }
+  navigator.clipboard.writeText(text).then(flash).catch(() => {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    flash()
+  })
 }
 
 const goBack = () => {
@@ -1109,6 +1161,78 @@ onUnmounted(() => {
   justify-content: center;
   color: var(--text-placeholder);
   font-size: 12px;
+}
+
+/* ===== Agent Setup ===== */
+.agent-setup-card {
+  margin-bottom: var(--space-md);
+}
+
+.agent-setup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-extra-light);
+}
+
+.agent-setup-header svg {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.agent-setup-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.agent-setup-help {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.install-command-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-base);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.install-command-value {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-all;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.install-command-box .copy-btn {
+  flex-shrink: 0;
+}
+
+.agent-setup-note-text {
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.agent-setup-note-text code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--border-extra-light);
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 
 /* ===== Alert History ===== */

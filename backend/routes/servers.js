@@ -6,9 +6,27 @@ const Server = require('../models/Server');
 const Metric = require('../models/Metric');
 const Alert = require('../models/Alert');
 const { auth, adminOnly } = require('../middleware/authMiddleware');
+const { resolvePublicBaseUrl } = require('./install');
 
 // All server management routes require authentication
 router.use(auth);
+
+/**
+ * Build the ready-to-copy one-line installer command for a server.
+ * When `token` is a real value it is baked in; otherwise a <AGENT_TOKEN>
+ * placeholder is used (the hashed token cannot be recovered after creation).
+ * The backend host is derived from PUBLIC_BASE_URL / the request — never hardcoded.
+ */
+function buildInstallCommand(req, token, serverName) {
+  const baseUrl = resolvePublicBaseUrl(req);
+  const tokenValue = token || '<AGENT_TOKEN>';
+  const namePart = serverName ? ` SERVER_NAME='${serverName}'` : '';
+  return (
+    `curl -sSL ${baseUrl}/install.sh | ` +
+    `AGENT_TOKEN='${tokenValue}' ` +
+    `BACKEND_URL='${baseUrl}/api/metrics'${namePart} bash`
+  );
+}
 
 /**
  * GET /api/servers
@@ -110,6 +128,10 @@ router.get('/:id', async (req, res) => {
     res.json({
       ...server.toObject(),
       status: effectiveStatus,
+      // Installer command with a <AGENT_TOKEN> placeholder — the real token is
+      // hashed and only shown once at create/regenerate time, so it can't be
+      // recovered here. Frontend can show this as a re-install reference.
+      installCommand: buildInstallCommand(req, null, server.name),
       currentMetrics: latestMetric
         ? {
             cpuPercent: latestMetric.cpuPercent,
@@ -180,6 +202,8 @@ router.post('/', async (req, res) => {
       },
       // Return plain text token ONCE — it won't be shown again
       token: rawToken,
+      // Ready-to-copy one-line installer with the token + backend URL baked in.
+      installCommand: buildInstallCommand(req, rawToken, server.name),
     });
   } catch (err) {
     console.error('Error creating server:', err);
@@ -296,6 +320,8 @@ router.put('/:id/regenerate-token', async (req, res) => {
       token: rawToken,
       serverId: server._id,
       serverName: server.name,
+      // Ready-to-copy one-line installer with the new token baked in.
+      installCommand: buildInstallCommand(req, rawToken, server.name),
     });
   } catch (err) {
     console.error('Error regenerating token:', err);

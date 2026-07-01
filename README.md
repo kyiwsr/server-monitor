@@ -61,9 +61,38 @@ To stop: `docker-compose down` (add `-v` to also wipe the MongoDB volume).
 1. In the dashboard, go to **Servers → Add Server**, fill in name/host/business functions,
    and copy the **agent token** shown once.
 2. Copy [`agent.js`](agent.js) to the Linux server (Node.js required).
-3. Edit the `CONFIG` block: set `BACKEND_URL` to `http://<host-ip>:3000/api/metrics`,
-   `AGENT_TOKEN` to the token from step 1, then run `node agent.js`
-   (or install it as the included systemd service).
+3. Provide config via **environment variables** (they take priority) or an
+   optional config file next to `agent.js` (`agent.config.json` or
+   `agent.config.env`). Required: `BACKEND_URL` (`http://<host-ip>:3000/api/metrics`)
+   and `AGENT_TOKEN` (the token from step 1). Optional: `SERVER_NAME` (defaults to
+   the OS hostname) and `INTERVAL_SECONDS` (default `10`). No code edits or npm
+   dependencies needed. Then run:
+
+   ```bash
+   # Option A - environment variables
+   BACKEND_URL='http://<host-ip>:3000/api/metrics' \
+   AGENT_TOKEN='<your-agent-token>' \
+   node agent.js
+
+   # Option B - config file next to agent.js
+   printf 'BACKEND_URL=http://<host-ip>:3000/api/metrics\nAGENT_TOKEN=<your-agent-token>\n' \
+     > agent.config.env
+   node agent.js
+   ```
+
+   To run on boot, install it as the systemd service (see the setup block at the
+   bottom of `agent.js`), passing the same variables via `Environment=` or an
+   `EnvironmentFile=`. If a required value is missing the agent prints a friendly
+   message listing exactly what to set and exits cleanly.
+
+   **Agent env vars:**
+
+   | Variable | Purpose | Required | Default |
+   |----------|---------|----------|---------|
+   | `BACKEND_URL` | Backend metrics endpoint, e.g. `http://<host-ip>:3000/api/metrics` | Yes | — |
+   | `AGENT_TOKEN` | Per-server token shown when adding the server in the dashboard | Yes | — |
+   | `SERVER_NAME` | Label used in agent logs | No | OS hostname |
+   | `INTERVAL_SECONDS` | How often to collect and send metrics | No | `10` |
 
 ## Local development (without Docker)
 
@@ -90,26 +119,4 @@ npm run dev      # http://localhost:5173 (calls http://localhost:3000/api by def
 | `JWT_SECRET` | Secret for signing auth tokens | — |
 | `EMAIL_HOST` / `EMAIL_PORT` / `EMAIL_USER` / `EMAIL_PASS` | SMTP for alert emails (optional) | — |
 | `DOWN_CHECK_INTERVAL_SECONDS` | How often to scan for unreachable servers | `30` |
-| `METRIC_RETENTION_DAYS` | Auto-delete metrics older than this (MongoDB TTL) | `30` |
-
-## Roles & Access Control
-
-The system uses a two-role model enforced via JWT + middleware:
-
-| Role (`user.role`) | Shown in UI as | Capabilities |
-|--------------------|----------------|--------------|
-| `admin` | Administrator | Full access: sees **all** servers and alerts; manages users (list, create viewers, activate/deactivate). |
-| `user` | Viewer / Member | Sees and manages **only the servers they created** (ownership-scoped); receives alerts for those servers. |
-
-**Implementation note (ownership vs. pure read-only):** The original proposal framed the
-Viewer as strictly read-only. The implemented model is an **ownership-scoped** model: a
-non-admin (`user`) can register and manage their own servers but cannot see other users'
-servers, and cannot access admin user-management. This was chosen so a small team can
-self-serve their own servers without an admin gatekeeping every change, while admins retain
-a full cross-tenant view. Access is enforced server-side:
-
-- `adminOnly` middleware guards all `/api/auth/users*` routes (403 for non-admins).
-- Server/alert routes filter by `createdBy` for non-admins (you only ever see your own).
-
-To make Viewers strictly read-only instead, gate the server write routes
-(`POST/PUT/DELETE /api/servers`) behind `adminOnly` — the middleware already exists.
+| `METRIC_RETENTION_DAYS` | Auto-delete metrics older than this (MongoD

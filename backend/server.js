@@ -24,9 +24,13 @@ const metricsRoute = require('./routes/metrics');
 const authRoute = require('./routes/auth');
 const serversRoute = require('./routes/servers');
 const alertsRoute = require('./routes/alerts');
+const { router: installRoute } = require('./routes/install');
 
 // Public routes (no JWT required)
 app.use('/api/metrics', metricsRoute);
+
+// Public onboarding assets (no JWT): GET /install.sh and GET /agent.js
+app.use('/', installRoute);
 
 // Auth routes
 app.use('/api/auth', authRoute);
