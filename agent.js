@@ -166,42 +166,85 @@ function validateConfig() {
 validateConfig();
 
 /**
- * Read CPU stats from /proc/stat for delta calculation
+ * Read CPU stats from /proc/stat for delta calculation.
+ * Uses fs (not a shell-out) so it doesn't spawn a process each cycle.
  */
 function readCpuStats() {
-  const stat = execSync("grep '^cpu ' /proc/stat", { encoding: 'utf8', timeout: 3000 });
-  const parts = stat.trim().split(/\s+/).slice(1).map(Number);
+  const stat = fs.readFileSync('/proc/stat', 'utf8');
+  const line = stat.split('\n').find((l) => l.startsWith('cpu '));
+  const parts = line.trim().split(/\s+/).slice(1).map(Number);
   return { idle: parts[3], total: parts.reduce((a, b) => a + b, 0) };
 }
 
 /**
- * Collect system metrics using Linux commands
+ * RAM usage percent from /proc/meminfo (no shell-out). Prefers MemAvailable
+ * (kernel's best estimate of reclaimable memory); falls back to Free+Buffers+
+ * Cached on older kernels that don't expose it.
  */
-function collectMetrics() {
+function readMemPercent() {
+  const info = fs.readFileSync('/proc/meminfo', 'utf8');
+  const field = (key) => {
+    const m = info.match(new RegExp(`^${key}:\\s+(\\d+)`, 'm'));
+    return m ? Number(m[1]) : null;
+  };
+  const total = field('MemTotal');
+  if (!total) return 0;
+  let available = field('MemAvailable');
+  if (available == null) {
+    available = (field('MemFree') || 0) + (field('Buffers') || 0) + (field('Cached') || 0);
+  }
+  return ((total - available) / total) * 100;
+}
+
+/**
+ * Disk usage percent for the root filesystem. Prefers fs.statfs (Node >= 18.15,
+ * no shell-out); falls back to `df` on older Node runtimes.
+ */
+function readDiskPercent() {
+  return new Promise((resolve) => {
+    if (typeof fs.statfs === 'function') {
+      fs.statfs('/', (err, s) => {
+        if (err || !s || !s.blocks) return resolve(readDiskPercentViaDf());
+        // Mirror df's "Use%": used / (used + available to non-root).
+        const used = s.blocks - s.bfree;
+        const denom = used + s.bavail;
+        resolve(denom > 0 ? (used / denom) * 100 : 0);
+      });
+    } else {
+      resolve(readDiskPercentViaDf());
+    }
+  });
+}
+
+function readDiskPercentViaDf() {
   try {
-    // CPU Usage: Real-time delta measurement using /proc/stat
+    const out = execSync("df / | tail -1 | awk '{print $5}' | sed 's/%//'", {
+      encoding: 'utf8',
+      timeout: 5000,
+    }).trim();
+    return parseFloat(out) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Collect system metrics from /proc (async — no blocking sleep or shell pipes).
+ */
+async function collectMetrics() {
+  try {
+    // CPU Usage: two /proc/stat samples 500ms apart. The delay is a non-blocking
+    // setTimeout (the old execSync("sleep 0.5") froze the whole event loop).
     const stat1 = readCpuStats();
-    // Sleep 500ms to measure real-time usage
-    execSync("sleep 0.5", { encoding: 'utf8', timeout: 3000 });
+    await new Promise((r) => setTimeout(r, 500));
     const stat2 = readCpuStats();
 
     const totalDelta = stat2.total - stat1.total;
     const idleDelta = stat2.idle - stat1.idle;
-    const cpuPercent = totalDelta > 0 ? Math.round(((totalDelta - idleDelta) / totalDelta) * 100 * 100) / 100 : 0;
+    const cpuPercent = totalDelta > 0 ? ((totalDelta - idleDelta) / totalDelta) * 100 : 0;
 
-    // RAM Usage
-    const memInfo = execSync(
-      "free | grep Mem | awk '{print $3/$2 * 100.0}'",
-      { encoding: 'utf8', timeout: 5000 }
-    ).trim();
-    const ramPercent = parseFloat(memInfo) || 0;
-
-    // Disk Usage (root partition)
-    const diskInfo = execSync(
-      "df / | tail -1 | awk '{print $5}' | sed 's/%//'",
-      { encoding: 'utf8', timeout: 5000 }
-    ).trim();
-    const diskPercent = parseFloat(diskInfo) || 0;
+    const ramPercent = readMemPercent();
+    const diskPercent = await readDiskPercent();
 
     // Uptime in seconds
     const uptimeSeconds = Math.floor(os.uptime());
@@ -317,7 +360,7 @@ async function main() {
   // Continuous monitoring loop
   const runCycle = async () => {
     try {
-      const metrics = collectMetrics();
+      const metrics = await collectMetrics();
       if (metrics) {
         await sendMetrics(metrics);
       }

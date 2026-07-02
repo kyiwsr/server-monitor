@@ -19,8 +19,26 @@ const path = require('path');
  * token is provided by the operator at install time (never embedded server-side).
  */
 
-// agent.js lives at the repository root, one level above backend/.
-const AGENT_JS_PATH = path.join(__dirname, '..', '..', 'agent.js');
+// agent.js lives in different places depending on how the backend is run:
+//   - local dev: repo root, one level above backend/  (../../agent.js)
+//   - Docker image: copied next to the backend source at /app  (../agent.js)
+// Resolve to whichever exists so GET /agent.js works in both. Cached after the
+// first hit; falls back to the dev path so errors stay descriptive.
+const AGENT_JS_CANDIDATES = [
+  path.join(__dirname, '..', '..', 'agent.js'), // dev: repo root
+  path.join(__dirname, '..', 'agent.js'),       // docker: copied into /app
+];
+let resolvedAgentJsPath = null;
+function resolveAgentJsPath() {
+  if (resolvedAgentJsPath) return resolvedAgentJsPath;
+  for (const candidate of AGENT_JS_CANDIDATES) {
+    if (fs.existsSync(candidate)) {
+      resolvedAgentJsPath = candidate;
+      return resolvedAgentJsPath;
+    }
+  }
+  return AGENT_JS_CANDIDATES[0];
+}
 
 /**
  * Resolve the public base URL of THIS backend (scheme + host, no trailing slash).
@@ -45,7 +63,7 @@ function resolvePublicBaseUrl(req) {
  * Serve the raw agent source so the installer can download it.
  */
 router.get('/agent.js', (req, res) => {
-  fs.readFile(AGENT_JS_PATH, 'utf8', (err, contents) => {
+  fs.readFile(resolveAgentJsPath(), 'utf8', (err, contents) => {
     if (err) {
       console.error('Error serving agent.js:', err.message);
       return res.status(500).type('text/plain').send('# Error: agent.js not found on the backend.\n');

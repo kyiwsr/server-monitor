@@ -6,6 +6,14 @@ const User = require('./models/User');
 
 const seedServer = async () => {
   try {
+    // Guard: only seed the hardcoded demo admin/server when explicitly opted in.
+    // Non-demo deployments must NOT auto-create admin@example.com / admin123 on
+    // every boot — set SEED_DEMO_DATA=true only for demos/dev.
+    if (process.env.SEED_DEMO_DATA !== 'true') {
+      console.log('Skipping demo seed (set SEED_DEMO_DATA=true to seed admin/demo data).');
+      process.exit(0);
+    }
+
     await mongoose.connect(process.env.MONGODB_URI);
     console.log('Connected to MongoDB');
 
@@ -41,6 +49,7 @@ const seedServer = async () => {
       description: 'Test server',
       businessFunctions: ['Website', 'Point of Sale'],
       agentToken: hashedToken,
+      agentTokenLookup: Server.hashTokenLookup(Token),
       thresholds: {
         cpuWarn: 70,
         cpuCrit: 90,
@@ -56,7 +65,7 @@ const seedServer = async () => {
 
     await server.save();
 
-    console.log(`Server seeded succesfully. \n Agent token: ${Token}`);
+    console.log(`Server seeded successfully. \n Agent token: ${Token}`);
 
     process.exit(0);
   } catch (err) {

@@ -41,11 +41,26 @@ router.get('/', async (req, res) => {
 
     const servers = await Server.find(query).select('-agentToken').sort({ createdAt: -1 });
 
-    const serversWithMetrics = await Promise.all(
-      servers.map(async (server) => {
-        const latestMetric = await Metric.findOne({ serverId: server._id })
-          .sort({ timestamp: -1 })
-          .limit(1);
+    // Fetch the latest metric for ALL these servers in a single aggregation
+    // instead of one Metric.findOne per server (previously N+1 queries per poll).
+    const serverIds = servers.map((s) => s._id);
+    const latestMetrics = await Metric.aggregate([
+      { $match: { serverId: { $in: serverIds } } },
+      { $sort: { serverId: 1, timestamp: -1 } },
+      {
+        $group: {
+          _id: '$serverId',
+          cpuPercent: { $first: '$cpuPercent' },
+          ramPercent: { $first: '$ramPercent' },
+          diskPercent: { $first: '$diskPercent' },
+          uptime: { $first: '$uptime' },
+        },
+      },
+    ]);
+    const metricByServer = new Map(latestMetrics.map((m) => [m._id.toString(), m]));
+
+    const serversWithMetrics = servers.map((server) => {
+        const latestMetric = metricByServer.get(server._id.toString()) || null;
 
         // Check if server is "Down" (no data received within threshold)
         let effectiveStatus = server.status;
@@ -82,8 +97,7 @@ router.get('/', async (req, res) => {
               }
             : null,
         };
-      }),
-    );
+    });
 
     res.json(serversWithMetrics);
   } catch (err) {
@@ -110,8 +124,7 @@ router.get('/:id', async (req, res) => {
 
     // Get latest metric
     const latestMetric = await Metric.findOne({ serverId: server._id })
-      .sort({ timestamp: -1 })
-      .limit(1);
+      .sort({ timestamp: -1 });
 
     // Check if server is "Down"
     let effectiveStatus = server.status;
@@ -169,6 +182,7 @@ router.post('/', async (req, res) => {
       description: description || '',
       businessFunctions: businessFunctions || [],
       agentToken: hashedToken,
+      agentTokenLookup: Server.hashTokenLookup(rawToken),
       thresholds: thresholds || {
         cpuWarn: 70,
         cpuCrit: 90,
@@ -313,6 +327,7 @@ router.put('/:id/regenerate-token', async (req, res) => {
     const hashedToken = await bcrypt.hash(rawToken, 10);
 
     server.agentToken = hashedToken;
+    server.agentTokenLookup = Server.hashTokenLookup(rawToken);
     await server.save();
 
     res.json({

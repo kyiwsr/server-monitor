@@ -8,16 +8,25 @@ app.use(cors());
 app.use(express.json());
 
 const { startDownChecker } = require('./utils/downChecker');
+const Metric = require('./models/Metric');
 
 //Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
+    // Reconcile the metric TTL index with METRIC_RETENTION_DAYS (Mongoose won't
+    // alter expireAfterSeconds on its own, so this surfaces/applies changes).
+    Metric.syncRetentionTTL();
     // Start the background server-down alert scheduler once the DB is ready
     startDownChecker();
   })
-  .catch(err => console.error('MongodDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    // Without a database every request 500s — fail fast so the orchestrator
+    // (docker-compose restart policy) can retry instead of serving a broken API.
+    process.exit(1);
+  });
 
 //Routes
 const metricsRoute = require('./routes/metrics');
@@ -45,6 +54,7 @@ app.get('/api/health', (req, res) => {
 });
 
 //Start server
-app.listen(process.env.PORT, () => {
-  console.log(`Backend is running on port ${process.env.PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Backend is running on port ${PORT}`);
 });

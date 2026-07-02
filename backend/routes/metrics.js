@@ -38,7 +38,7 @@ const RECOMMENDED_ACTIONS = {
  */
 router.post('/', async (req, res) => {
   try {
-    const {
+    let {
       token,
       timestamp,
       cpuPercent,
@@ -47,21 +47,56 @@ router.post('/', async (req, res) => {
       uptimeSeconds,
     } = req.body;
 
-    // Find server by matching token
-    const servers = await Server.find();
-    let matchedServer = null;
+    if (!token || typeof token !== 'string') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
 
-    for (const server of servers) {
-      const isMatch = await bcrypt.compare(token, server.agentToken);
-      if (isMatch) {
-        matchedServer = server;
-        break;
+    // Authenticate the agent by token.
+    // Fast path: look the server up by the indexed SHA-256 of the token (O(1)),
+    // then bcrypt.compare only that single candidate to confirm.
+    const lookup = Server.hashTokenLookup(token);
+    let matchedServer = await Server.findOne({ agentTokenLookup: lookup });
+    if (matchedServer) {
+      const isMatch = await bcrypt.compare(token, matchedServer.agentToken);
+      if (!isMatch) matchedServer = null;
+    }
+
+    // Legacy fallback + migration: servers created before agentTokenLookup
+    // existed have no lookup key. Scan only those (a bounded set that shrinks to
+    // zero as each migrates), bcrypt.compare, and backfill the lookup on the
+    // first successful auth so subsequent requests take the fast path.
+    if (!matchedServer) {
+      const legacyServers = await Server.find({ agentTokenLookup: { $exists: false } });
+      for (const server of legacyServers) {
+        if (await bcrypt.compare(token, server.agentToken)) {
+          matchedServer = server;
+          matchedServer.agentTokenLookup = lookup; // persisted by save() below
+          break;
+        }
       }
     }
 
     if (!matchedServer) {
       console.log('Invalid token received');
       return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Validate & coerce numeric metric fields. Agents send numbers, but a
+    // malformed payload (NaN, strings, out-of-range) would silently mis-classify
+    // against thresholds or store garbage — reject with 400 instead.
+    cpuPercent = Number(cpuPercent);
+    ramPercent = Number(ramPercent);
+    diskPercent = Number(diskPercent);
+    uptimeSeconds = Number(uptimeSeconds);
+
+    const inPercentRange = (n) => Number.isFinite(n) && n >= 0 && n <= 100;
+    if (!inPercentRange(cpuPercent) || !inPercentRange(ramPercent) || !inPercentRange(diskPercent)) {
+      return res.status(400).json({
+        error: 'cpuPercent, ramPercent, and diskPercent must be numbers between 0 and 100.',
+      });
+    }
+    if (!Number.isFinite(uptimeSeconds) || uptimeSeconds < 0) {
+      return res.status(400).json({ error: 'uptimeSeconds must be a non-negative number.' });
     }
 
     // Save metric
@@ -197,10 +232,10 @@ router.post('/', async (req, res) => {
           // Send email notification if user exists and has notifications enabled
           if (serverOwner && serverOwner.emailNotifications) {
             const emailResult = await sendAlertEmail(newAlert, matchedServer, serverOwner);
-            if (emailResult !== 'failed') {
-              newAlert.emailStatus = emailResult;
-              await newAlert.save();
-            }
+            // Persist the outcome either way — 'failed' must not be left as
+            // 'pending', which conflates "gave up" with "not tried yet".
+            newAlert.emailStatus = emailResult;
+            await newAlert.save();
           }
         }
       } else {

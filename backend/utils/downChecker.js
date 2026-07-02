@@ -117,10 +117,10 @@ async function checkServersOnce() {
           // Email the owner if they exist and have notifications enabled
           if (owner && owner.emailNotifications) {
             const result = await sendAlertEmail(alert, server, owner);
-            if (result !== 'failed') {
-              alert.emailStatus = result;
-              await alert.save();
-            }
+            // Persist the outcome either way — 'failed' must not be left as
+            // 'pending', which conflates "gave up" with "not tried yet".
+            alert.emailStatus = result;
+            await alert.save();
           }
         }
       } else if (existingDownAlert) {

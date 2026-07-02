@@ -14,7 +14,11 @@ services:
       - monitor-net
 
   backend:
-    build: ./backend
+    build:
+      # Context is the repo root (not ./backend) so the Dockerfile can COPY
+      # agent.js, which lives at the repo root, into the image.
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
       PORT: 3000
@@ -26,6 +30,9 @@ services:
       EMAIL_PASS: ${EMAIL_PASS:-}
       DOWN_CHECK_INTERVAL_SECONDS: ${DOWN_CHECK_INTERVAL_SECONDS:-30}
       METRIC_RETENTION_DAYS: ${METRIC_RETENTION_DAYS:-30}
+      # Seed the demo admin (admin@example.com / admin123) + demo server on boot.
+      # Off by default — set to true only for demos/dev, never production.
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
     depends_on:
       mongo:
         condition: service_healthy

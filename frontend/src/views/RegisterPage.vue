@@ -9,8 +9,11 @@
             <line x1="12" y1="17" x2="12" y2="21"/>
           </svg>
         </div>
-        <h1>Create Account</h1>
-        <p class="register-subtitle">Register for Server Monitor</p>
+        <h1>Administrator Setup</h1>
+        <p class="register-subtitle">
+          Create the first (admin) account. Once set up, registration is closed —
+          admins add further users from Settings.
+        </p>
       </div>
 
       <div v-if="error" class="register-error">
