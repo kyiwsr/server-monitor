@@ -255,12 +255,12 @@
           </el-table-column>
           <el-table-column label="Value" min-width="70" align="right">
             <template #default="{ row }">
-              <span class="alert-value-cell" :style="{ color: row.color }">{{ row.value }}%</span>
+              <span class="alert-value-cell" :style="{ color: row.color }">{{ row.valueDisplay }}</span>
             </template>
           </el-table-column>
           <el-table-column label="Threshold" min-width="80" align="right">
             <template #default="{ row }">
-              <span class="alert-threshold-cell">{{ row.threshold }}%</span>
+              <span class="alert-threshold-cell">{{ row.thresholdDisplay }}</span>
             </template>
           </el-table-column>
           <el-table-column label="Severity" min-width="80">
@@ -450,46 +450,33 @@ function getStatusLabel(value, type) {
   return 'Normal'
 }
 
-// Alert History derived from metrics
-const alertHistory = computed(() => {
-  const history = metricsHistory.value
-  if (!history || history.length === 0) return []
+// Alert History — real persisted Alert records for this server (fetched from
+// the API). Previously this was re-derived client-side from the downsampled
+// metric history, so spikes hidden by averaging vanished and the numbers didn't
+// match the actual Alert records.
+const alertHistory = ref([])
 
-  const alerts = []
-  const t = thresholds.value
-
-  for (const point of history) {
-    const checks = [
-      { metric: 'CPU', value: point.cpuPercent, warn: t.cpuWarn, crit: t.cpuCrit },
-      { metric: 'RAM', value: point.ramPercent, warn: t.ramWarn, crit: t.ramCrit },
-      { metric: 'Disk', value: point.diskPercent, warn: t.diskWarn, crit: t.diskCrit },
-    ]
-
-    for (const check of checks) {
-      if (check.value == null) continue
-      let severity = null
-      if (check.value >= check.crit) severity = 'Critical'
-      else if (check.value >= check.warn) severity = 'Warning'
-
-      if (severity) {
-        const time = new Date(point.timestamp).toLocaleString()
-        alerts.push({
-          time,
-          metric: check.metric,
-          value: check.value,
-          threshold: severity === 'Critical' ? check.crit : check.warn,
-          severity,
-          color: severity === 'Critical' ? '#F56C6C' : '#E6A23C',
-        })
+const fetchAlerts = async () => {
+  try {
+    const response = await api.getAlerts({ serverId, limit: 50 })
+    const list = response.data?.alerts || []
+    alertHistory.value = list.map((a) => {
+      const isDown = a.type === 'down'
+      return {
+        time: new Date(a.triggerAt).toLocaleString(),
+        metric: a.type.toUpperCase(),
+        // "down" alerts are time-based (seconds), the rest are percentages.
+        valueDisplay: isDown ? `${a.value}s` : `${a.value}%`,
+        thresholdDisplay: isDown ? `${a.threshold}s` : `${a.threshold}%`,
+        severity: a.severity,
+        status: a.status,
+        color: a.severity === 'Critical' ? '#F56C6C' : '#E6A23C',
       }
-    }
+    })
+  } catch (err) {
+    console.error('Error fetching alerts:', err)
   }
-
-  // Return last 50 alerts, sorted by time descending
-  return alerts
-    .sort((a, b) => new Date(b.time) - new Date(a.time))
-    .slice(0, 50)
-})
+}
 
 // Chart Options
 const combinedChartOptions = {
@@ -644,9 +631,12 @@ const diskChartData = computed(() => ({
   }],
 }))
 
-watch(metricsHistory, (newData) => {
-  if (newData.length > 0) chartKey.value++
-}, { deep: true })
+// Re-key the charts only when the number of points changes (e.g. a new sample
+// arrived or the range changed) rather than deep-watching the whole array on
+// every 10s refresh, which forced a full chart remount each tick.
+watch(() => metricsHistory.value.length, (len) => {
+  if (len > 0) chartKey.value++
+})
 
 const fetchServerInfo = async () => {
   try {
@@ -740,9 +730,10 @@ const goBack = () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchServerInfo(), fetchMetrics()])
+  await Promise.all([fetchServerInfo(), fetchMetrics(), fetchAlerts()])
   refreshInterval = setInterval(() => {
     fetchServerInfo()
+    fetchAlerts()
     // Long ranges (7d/30d) are aggregated server-side and barely change between
     // ticks — only auto-refresh history for the short, raw ranges. Switching
     // range still fetches once via the radio-group @change handler.

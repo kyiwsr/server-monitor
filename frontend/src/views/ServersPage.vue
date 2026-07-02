@@ -136,7 +136,7 @@
                 <div class="cell-progress" v-if="row.currentMetrics">
                   <el-progress
                     :percentage="Math.round(row.currentMetrics.cpuPercent)"
-                    :color="getMetricColor(row.currentMetrics.cpuPercent, 'cpu')"
+                    :color="getMetricColor(row.currentMetrics.cpuPercent, 'cpu', row.thresholds)"
                     :stroke-width="6"
                     :show-text="true"
                   />
@@ -149,7 +149,7 @@
                 <div class="cell-progress" v-if="row.currentMetrics">
                   <el-progress
                     :percentage="Math.round(row.currentMetrics.ramPercent)"
-                    :color="getMetricColor(row.currentMetrics.ramPercent, 'ram')"
+                    :color="getMetricColor(row.currentMetrics.ramPercent, 'ram', row.thresholds)"
                     :stroke-width="6"
                     :show-text="true"
                   />
@@ -162,7 +162,7 @@
                 <div class="cell-progress" v-if="row.currentMetrics">
                   <el-progress
                     :percentage="Math.round(row.currentMetrics.diskPercent)"
-                    :color="getMetricColor(row.currentMetrics.diskPercent, 'disk')"
+                    :color="getMetricColor(row.currentMetrics.diskPercent, 'disk', row.thresholds)"
                     :stroke-width="6"
                     :show-text="true"
                   />
@@ -240,7 +240,7 @@
                     <span class="metric-label">CPU</span>
                     <el-progress
                       :percentage="Math.round(server.currentMetrics.cpuPercent)"
-                      :color="getMetricColor(server.currentMetrics.cpuPercent, 'cpu')"
+                      :color="getMetricColor(server.currentMetrics.cpuPercent, 'cpu', server.thresholds)"
                       :stroke-width="5"
                       :show-text="true"
                     />
@@ -249,7 +249,7 @@
                     <span class="metric-label">RAM</span>
                     <el-progress
                       :percentage="Math.round(server.currentMetrics.ramPercent)"
-                      :color="getMetricColor(server.currentMetrics.ramPercent, 'ram')"
+                      :color="getMetricColor(server.currentMetrics.ramPercent, 'ram', server.thresholds)"
                       :stroke-width="5"
                       :show-text="true"
                     />
@@ -258,7 +258,7 @@
                     <span class="metric-label">Disk</span>
                     <el-progress
                       :percentage="Math.round(server.currentMetrics.diskPercent)"
-                      :color="getMetricColor(server.currentMetrics.diskPercent, 'disk')"
+                      :color="getMetricColor(server.currentMetrics.diskPercent, 'disk', server.thresholds)"
                       :stroke-width="5"
                       :show-text="true"
                     />
@@ -547,12 +547,17 @@ function statusTagType(status) {
   return map[status] || 'info'
 }
 
-function getMetricColor(value, type) {
+// Colour a metric against the server's OWN configured thresholds (falling back
+// to sensible defaults), so the list matches the thresholds set per server
+// rather than a hardcoded 70/90/75/90.
+function getMetricColor(value, type, thresholds) {
   if (value == null) return '#909399'
-  const thresholds = { cpu: { warn: 70, crit: 90 }, ram: { warn: 70, crit: 90 }, disk: { warn: 75, crit: 90 } }
-  const t = thresholds[type]
-  if (value >= t.crit) return '#F56C6C'
-  if (value >= t.warn) return '#E6A23C'
+  const defaults = { cpu: { warn: 70, crit: 90 }, ram: { warn: 70, crit: 90 }, disk: { warn: 75, crit: 90 } }
+  const d = defaults[type]
+  const warn = thresholds?.[`${type}Warn`] ?? d.warn
+  const crit = thresholds?.[`${type}Crit`] ?? d.crit
+  if (value >= crit) return '#F56C6C'
+  if (value >= warn) return '#E6A23C'
   return '#67C23A'
 }
 

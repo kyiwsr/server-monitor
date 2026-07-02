@@ -11,10 +11,21 @@ const generateToken = (userId) => {
 
 /**
  * POST /api/auth/register
- * Create a new user account
+ * Closed (admin-only) registration model — this public endpoint only BOOTSTRAPS
+ * the very first account (promoted to admin) when the system has no users yet.
+ * Once any user exists, self-signup is disabled and further accounts are created
+ * by an admin via POST /api/auth/register-viewer.
  */
 router.post('/register', async (req, res) => {
   try {
+    // Gate: only allow registration when the system is empty (first-run setup).
+    const userCount = await User.countDocuments();
+    if (userCount > 0) {
+      return res.status(403).json({
+        error: 'Registration is closed. Ask an administrator to create your account.',
+      });
+    }
+
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
@@ -25,19 +36,14 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters.' });
     }
 
-    // Check if email already exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Email already registered.' });
-    }
-
-    const user = new User({ name, email, password });
+    // First account is the administrator (owns user + server management).
+    const user = new User({ name, email, password, role: 'admin' });
     await user.save();
 
     const token = generateToken(user._id);
 
     res.status(201).json({
-      message: 'User registered successfully.',
+      message: 'Administrator account created successfully.',
       token,
       user: user.toJSON(),
     });
