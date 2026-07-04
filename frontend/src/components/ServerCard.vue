@@ -136,7 +136,7 @@ const statusClass = computed(() => {
 })
 
 const tagType = computed(() => {
-  const map = { Ok: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
+  const map = { Normal: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
   return map[props.server.status] || 'info'
 })
 
@@ -229,7 +229,7 @@ const handleClick = () => {
 }
 
 /* Status border accents */
-.server-card.card-ok { border-left: 4px solid var(--color-ok) !important; }
+.server-card.card-normal { border-left: 4px solid var(--color-ok) !important; }
 .server-card.card-warning { border-left: 4px solid var(--color-warning) !important; }
 .server-card.card-critical { border-left: 4px solid var(--color-critical) !important; }
 .server-card.card-down { border-left: 4px solid var(--color-down) !important; }

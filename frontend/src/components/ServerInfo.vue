@@ -112,7 +112,7 @@ const thresholds = computed(() => {
 })
 
 const tagType = computed(() => {
-  const map = { Ok: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
+  const map = { Normal: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
   return map[props.server.status] || 'info'
 })
 

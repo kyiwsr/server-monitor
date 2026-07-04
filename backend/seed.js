@@ -59,7 +59,7 @@ const seedServer = async () => {
         diskCrit: 90,
         downAfterSeconds: 60,
       },
-      status: 'Ok',
+      status: 'Normal',
       createdBy: adminUser._id,
     });
 

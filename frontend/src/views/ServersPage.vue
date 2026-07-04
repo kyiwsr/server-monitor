@@ -61,7 +61,7 @@
           />
           <el-radio-group v-model="statusFilter" size="small">
             <el-radio-button label="">All</el-radio-button>
-            <el-radio-button label="Ok">Healthy</el-radio-button>
+            <el-radio-button label="Normal">Healthy</el-radio-button>
             <el-radio-button label="Warning">Warning</el-radio-button>
             <el-radio-button label="Critical">Critical</el-radio-button>
             <el-radio-button label="Down">Offline</el-radio-button>
@@ -543,7 +543,7 @@ const filteredServers = computed(() => {
 })
 
 function statusTagType(status) {
-  const map = { Ok: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
+  const map = { Normal: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
   return map[status] || 'info'
 }
 
@@ -913,7 +913,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.avatar-ok { background: var(--color-ok-light); color: var(--color-ok); }
+.avatar-normal { background: var(--color-ok-light); color: var(--color-ok); }
 .avatar-warning { background: var(--color-warning-light); color: var(--color-warning); }
 .avatar-critical { background: var(--color-critical-light); color: var(--color-critical); }
 .avatar-down { background: var(--color-down-light); color: var(--color-down); }
