@@ -1,8 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Alert = require('../models/Alert');
-const Server = require('../models/Server');
-const { auth } = require('../middleware/authMiddleware');
+const { auth, adminOnly } = require('../middleware/authMiddleware');
 
 // All alert routes require authentication
 router.use(auth);
@@ -43,19 +42,8 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Filter by user's servers (non-admins only see their own servers' alerts)
-    if (req.user.role !== 'admin') {
-      const userServers = await Server.find({ createdBy: req.user._id }).select('_id');
-      const serverIds = userServers.map((s) => s._id);
-      query.serverId = { $in: serverIds };
-      // Keep serverId filter if already set
-      if (req.query.serverId) {
-        query.serverId = { $in: serverIds.filter((id) => id.toString() === req.query.serverId) };
-        if (query.serverId.$in.length === 0) {
-          return res.json({ alerts: [], total: 0, criticalCount: 0, warningCount: 0, resolvedCount: 0 });
-        }
-      }
-    }
+    // Alerts are read-only monitoring data visible to all authenticated users;
+    // no per-user server filtering (only admins can act on them / resolve).
 
     const limitNum = parseInt(limit) || 100;
 
@@ -116,13 +104,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Alert not found.' });
     }
 
-    // Check access
-    if (req.user.role !== 'admin') {
-      const server = await Server.findById(alert.serverId);
-      if (!server || server.createdBy.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Access denied.' });
-      }
-    }
+    // Reads are open to all authenticated users (read-only monitoring).
 
     res.json({
       _id: alert._id,
@@ -151,21 +133,13 @@ router.get('/:id', async (req, res) => {
 
 /**
  * PUT /api/alerts/:id/resolve
- * Manually resolve an alert
+ * Manually resolve an alert — operational write, admin-only.
  */
-router.put('/:id/resolve', async (req, res) => {
+router.put('/:id/resolve', adminOnly, async (req, res) => {
   try {
     const alert = await Alert.findById(req.params.id);
     if (!alert) {
       return res.status(404).json({ error: 'Alert not found.' });
-    }
-
-    // Check access
-    if (req.user.role !== 'admin') {
-      const server = await Server.findById(alert.serverId);
-      if (!server || server.createdBy.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ error: 'Access denied.' });
-      }
     }
 
     if (alert.status === 'resolved') {

@@ -209,6 +209,48 @@ router.post('/register-viewer', auth, adminOnly, async (req, res) => {
 });
 
 /**
+ * PUT /api/auth/users/:id
+ * Admin edits a user's name/email and can optionally reset their password
+ * (FR3). Role and active status are intentionally NOT editable here —
+ * deactivation stays on PATCH /users/:id/toggle-status.
+ */
+router.put('/users/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, email, newPassword } = req.body;
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (name !== undefined) user.name = name;
+
+    if (email !== undefined) {
+      const existingUser = await User.findOne({ email: email.toLowerCase(), _id: { $ne: user._id } });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already in use.' });
+      }
+      user.email = email.toLowerCase();
+    }
+
+    // Admin-initiated reset — no current password required.
+    if (newPassword !== undefined && newPassword !== '') {
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+      }
+      user.password = newPassword;
+    }
+
+    await user.save();
+
+    res.json({ message: 'User updated successfully.', user: user.toJSON() });
+  } catch (err) {
+    console.error('Error updating user:', err);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
+/**
  * PATCH /api/auth/users/:id/toggle-status
  * Activate / deactivate a user account (admin only)
  */
