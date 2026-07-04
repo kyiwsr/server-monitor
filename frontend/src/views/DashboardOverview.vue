@@ -45,8 +45,8 @@
         <el-card
           shadow="never"
           class="stat-card stat-card-ok"
-          :class="{ 'is-active': activeFilter === 'Ok' }"
-          @click="toggleFilter('Ok')"
+          :class="{ 'is-active': activeFilter === 'Normal' }"
+          @click="toggleFilter('Normal')"
         >
           <div class="stat-body">
             <div class="stat-icon stat-icon-ok">
@@ -296,7 +296,7 @@ watch(hasError, (failed) => {
   else error.value = ''
 }, { immediate: true })
 
-const okCount = computed(() => servers.value.filter(s => s.status === 'Ok').length)
+const okCount = computed(() => servers.value.filter(s => s.status === 'Normal').length)
 const warningCount = computed(() => servers.value.filter(s => s.status === 'Warning').length)
 const criticalCount = computed(() => servers.value.filter(s => s.status === 'Critical').length)
 const downCount = computed(() => servers.value.filter(s => s.status === 'Down').length)
@@ -313,7 +313,7 @@ const warningServers = computed(() =>
   filteredServers.value.filter(s => s.status === 'Warning')
 )
 const okServers = computed(() =>
-  filteredServers.value.filter(s => s.status === 'Ok')
+  filteredServers.value.filter(s => s.status === 'Normal')
 )
 const downServers = computed(() =>
   filteredServers.value.filter(s => s.status === 'Down')

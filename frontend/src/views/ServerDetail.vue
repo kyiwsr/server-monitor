@@ -379,7 +379,7 @@ const ICONS = {
 const prevMetrics = ref(null)
 
 const tagType = computed(() => {
-  const map = { Ok: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
+  const map = { Normal: 'success', Warning: 'warning', Critical: 'danger', Down: 'info' }
   return map[server.value?.status] || 'info'
 })
 
@@ -832,7 +832,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.avatar-ok { background: var(--color-ok-light); color: var(--color-ok); }
+.avatar-normal { background: var(--color-ok-light); color: var(--color-ok); }
 .avatar-warning { background: var(--color-warning-light); color: var(--color-warning); }
 .avatar-critical { background: var(--color-critical-light); color: var(--color-critical); }
 .avatar-down { background: var(--color-down-light); color: var(--color-down); }

@@ -28,8 +28,8 @@ const serverSchema = new mongoose.Schema(
     lastDataSent: { type: Date },
     status: {
       type: String,
-      enum: ['Ok', 'Warning', 'Critical', 'Down'],
-      default: 'Ok',
+      enum: ['Normal', 'Warning', 'Critical', 'Down'],
+      default: 'Normal',
     },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     timezone: { type: String, default: 'UTC' },

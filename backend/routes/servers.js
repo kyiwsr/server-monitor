@@ -195,7 +195,7 @@ router.post('/', async (req, res) => {
       createdBy: req.user._id,
       timezone: timezone || 'UTC',
       tags: tags || [],
-      status: 'Ok',
+      status: 'Normal',
     });
 
     await server.save();

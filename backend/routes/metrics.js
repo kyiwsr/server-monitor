@@ -116,7 +116,7 @@ router.post('/', async (req, res) => {
 
     // Calculate server status based on thresholds
     const thresholds = matchedServer.thresholds;
-    let newStatus = 'Ok';
+    let newStatus = 'Normal';
 
     // Check Critical thresholds first
     if (
