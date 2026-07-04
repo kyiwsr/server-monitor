@@ -31,7 +31,7 @@
           {{ servers.length }} server{{ servers.length === 1 ? '' : 's' }} monitored<span v-if="statusFilter || searchQuery"> · {{ filteredServers.length }} shown</span>
         </p>
       </div>
-      <el-button type="primary" size="default" @click="openAddServerDialog" class="add-server-btn">
+      <el-button v-if="authStore.isAdmin" type="primary" size="default" @click="openAddServerDialog" class="add-server-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Server
       </el-button>
@@ -179,8 +179,8 @@
               <template #default="{ row }">
                 <div class="table-actions">
                   <el-button type="primary" size="small" link @click="goToServer(row._id)">View</el-button>
-                  <el-button type="primary" size="small" link @click="openEditDialog(row)">Edit</el-button>
-                  <el-button type="danger" size="small" link @click="confirmDelete(row)">Delete</el-button>
+                  <el-button v-if="authStore.isAdmin" type="primary" size="small" link @click="openEditDialog(row)">Edit</el-button>
+                  <el-button v-if="authStore.isAdmin" type="danger" size="small" link @click="confirmDelete(row)">Delete</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -468,8 +468,10 @@ import { Search } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import api from '../services/api'
 import { useServersStore } from '../stores/servers'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const serversStore = useServersStore()
 const { servers, loaded } = storeToRefs(serversStore)
 const searchQuery = ref('')

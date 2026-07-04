@@ -30,16 +30,12 @@ function buildInstallCommand(req, token, serverName) {
 
 /**
  * GET /api/servers
- * Get all servers (admin sees all, users see their own)
+ * Get all servers — read access for every authenticated user (Viewers monitor
+ * all servers; only admins can manage them).
  */
 router.get('/', async (req, res) => {
   try {
-    let query = {};
-    if (req.user.role !== 'admin') {
-      query.createdBy = req.user._id;
-    }
-
-    const servers = await Server.find(query).select('-agentToken').sort({ createdAt: -1 });
+    const servers = await Server.find().select('-agentToken').sort({ createdAt: -1 });
 
     // Fetch the latest metric for ALL these servers in a single aggregation
     // instead of one Metric.findOne per server (previously N+1 queries per poll).
@@ -117,10 +113,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Server not found.' });
     }
 
-    // Check ownership
-    if (req.user.role !== 'admin' && server.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Access denied.' });
-    }
+    // Reads are open to all authenticated users (read-only monitoring).
 
     // Get latest metric
     const latestMetric = await Metric.findOne({ serverId: server._id })
@@ -163,8 +156,9 @@ router.get('/:id', async (req, res) => {
 /**
  * POST /api/servers
  * Create a new server (generates token, returns plain token ONCE)
+ * Admin-only — Viewers are read-only.
  */
-router.post('/', async (req, res) => {
+router.post('/', adminOnly, async (req, res) => {
   try {
     const { name, host, description, businessFunctions, thresholds, timezone, tags } = req.body;
 
@@ -228,17 +222,13 @@ router.post('/', async (req, res) => {
 /**
  * PUT /api/servers/:id
  * Update server settings/thresholds
+ * Admin-only — Viewers are read-only.
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', adminOnly, async (req, res) => {
   try {
     const server = await Server.findById(req.params.id);
     if (!server) {
       return res.status(404).json({ error: 'Server not found.' });
-    }
-
-    // Check ownership
-    if (req.user.role !== 'admin' && server.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Access denied.' });
     }
 
     const { name, host, description, businessFunctions, thresholds, timezone, tags } = req.body;
@@ -281,17 +271,13 @@ router.put('/:id', async (req, res) => {
 /**
  * DELETE /api/servers/:id
  * Delete server and its metrics/alerts
+ * Admin-only — Viewers are read-only.
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', adminOnly, async (req, res) => {
   try {
     const server = await Server.findById(req.params.id);
     if (!server) {
       return res.status(404).json({ error: 'Server not found.' });
-    }
-
-    // Check ownership
-    if (req.user.role !== 'admin' && server.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Access denied.' });
     }
 
     // Delete associated metrics and alerts
@@ -309,17 +295,13 @@ router.delete('/:id', async (req, res) => {
 /**
  * PUT /api/servers/:id/regenerate-token
  * Generate new agent token
+ * Admin-only — Viewers are read-only.
  */
-router.put('/:id/regenerate-token', async (req, res) => {
+router.put('/:id/regenerate-token', adminOnly, async (req, res) => {
   try {
     const server = await Server.findById(req.params.id);
     if (!server) {
       return res.status(404).json({ error: 'Server not found.' });
-    }
-
-    // Check ownership
-    if (req.user.role !== 'admin' && server.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Access denied.' });
     }
 
     // Generate a random token
@@ -353,17 +335,11 @@ router.get('/:id/metrics', async (req, res) => {
     const { id } = req.params;
     const timeRange = req.query.timeRange || '24h';
 
-    // Ownership check — mirror the other server routes so a non-admin cannot
-    // read another user's metric history by guessing the server id (IDOR).
+    // Reads are open to all authenticated users (read-only monitoring); still
+    // 404 on an unknown id so the response is meaningful.
     const server = await Server.findById(id);
     if (!server) {
       return res.status(404).json({ error: 'Server not found.' });
-    }
-    if (
-      req.user.role !== 'admin' &&
-      (!server.createdBy || server.createdBy.toString() !== req.user._id.toString())
-    ) {
-      return res.status(403).json({ error: 'Access denied.' });
     }
 
     const now = new Date();

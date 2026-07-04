@@ -99,4 +99,7 @@ export default {
   createViewer(data) {
     return apiClient.post('/auth/register-viewer', data)
   },
+  updateUser(userId, data) {
+    return apiClient.put(`/auth/users/${userId}`, data)
+  },
 }

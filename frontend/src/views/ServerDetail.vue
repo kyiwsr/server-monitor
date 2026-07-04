@@ -115,8 +115,8 @@
       <!-- Server Info -->
       <ServerInfo :server="server" />
 
-      <!-- Agent Setup / Re-install -->
-      <el-card shadow="never" class="agent-setup-card" v-if="server.installCommand">
+      <!-- Agent Setup / Re-install (admin-only — Viewers are read-only) -->
+      <el-card shadow="never" class="agent-setup-card" v-if="server.installCommand && authStore.isAdmin">
         <div class="agent-setup-header">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
@@ -294,11 +294,13 @@ import {
 import api from '../services/api'
 import ServerInfo from '../components/ServerInfo.vue'
 import { timeAgo } from '../utils/time'
+import { useAuthStore } from '../stores/auth'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const serverId = route.params.id
 
 const server = ref(null)

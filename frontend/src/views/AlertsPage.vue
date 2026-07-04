@@ -175,7 +175,7 @@
           <el-table-column label="Actions" width="90" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
-                v-if="row.status === 'active'"
+                v-if="row.status === 'active' && authStore.isAdmin"
                 type="success"
                 size="small"
                 link
@@ -183,7 +183,7 @@
               >
                 Resolve
               </el-button>
-              <span v-else class="cell-resolved-time">{{ timeAgo(row.resolvedAt) }}</span>
+              <span v-else-if="row.status !== 'active'" class="cell-resolved-time">{{ timeAgo(row.resolvedAt) }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -226,7 +226,9 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '../services/api'
 import { timeAgo as formatTimeAgo } from '../utils/time'
+import { useAuthStore } from '../stores/auth'
 
+const authStore = useAuthStore()
 const alerts = ref([])
 const loading = ref(true)
 const error = ref('')

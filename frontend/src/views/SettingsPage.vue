@@ -140,6 +140,11 @@
                 <span class="cell-time">{{ row.lastLogin ? formatTimestamp(row.lastLogin) : 'Never' }}</span>
               </template>
             </el-table-column>
+            <el-table-column label="Actions" width="80" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" size="small" link @click="openEditUser(row)">Edit</el-button>
+              </template>
+            </el-table-column>
           </el-table>
           <div v-else class="empty-section-inline"><span>No users found.</span></div>
         </el-card>
@@ -167,6 +172,27 @@
       </template>
     </el-dialog>
 
+    <!-- Edit User Dialog -->
+    <el-dialog v-model="editUserDialogVisible" title="Edit User Account" width="440px">
+      <el-form :model="editUserForm" label-position="top" size="small">
+        <el-form-item label="Name">
+          <el-input v-model="editUserForm.name" placeholder="Full name" />
+        </el-form-item>
+        <el-form-item label="Email">
+          <el-input v-model="editUserForm.email" placeholder="user@example.com" />
+        </el-form-item>
+        <el-form-item label="Reset Password">
+          <el-input v-model="editUserForm.newPassword" type="password" show-password placeholder="Leave blank to keep current" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="editUserDialogVisible = false">Cancel</el-button>
+        <el-button size="small" type="primary" :loading="editUserSaving" @click="saveUser">
+          {{ editUserSaving ? 'Saving...' : 'Save Changes' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -186,6 +212,12 @@ const profileSaving = ref(false)
 const addUserDialogVisible = ref(false)
 const addUserSaving = ref(false)
 const addUserForm = ref({ name: '', email: '', password: '' })
+
+// Edit user dialog
+const editUserDialogVisible = ref(false)
+const editUserSaving = ref(false)
+const editUserId = ref(null)
+const editUserForm = ref({ name: '', email: '', newPassword: '' })
 
 // Profile form
 const profileForm = ref({
@@ -282,6 +314,41 @@ async function createViewer() {
     setTimeout(() => { error.value = '' }, 4000)
   } finally {
     addUserSaving.value = false
+  }
+}
+
+function openEditUser(user) {
+  editUserId.value = user._id
+  editUserForm.value = { name: user.name, email: user.email, newPassword: '' }
+  editUserDialogVisible.value = true
+}
+
+async function saveUser() {
+  if (!editUserId.value) return
+  if (!editUserForm.value.name || !editUserForm.value.email) {
+    error.value = 'Name and email are required.'
+    setTimeout(() => { error.value = '' }, 4000)
+    return
+  }
+  if (editUserForm.value.newPassword && editUserForm.value.newPassword.length < 6) {
+    error.value = 'New password must be at least 6 characters.'
+    setTimeout(() => { error.value = '' }, 4000)
+    return
+  }
+  editUserSaving.value = true
+  try {
+    const data = { name: editUserForm.value.name, email: editUserForm.value.email }
+    if (editUserForm.value.newPassword) data.newPassword = editUserForm.value.newPassword
+    await api.updateUser(editUserId.value, data)
+    editUserDialogVisible.value = false
+    await fetchUsers()
+    successMessage.value = 'User updated successfully'
+    setTimeout(() => { successMessage.value = '' }, 4000)
+  } catch (err) {
+    error.value = err.response?.data?.error || 'Failed to update user'
+    setTimeout(() => { error.value = '' }, 4000)
+  } finally {
+    editUserSaving.value = false
   }
 }
 
