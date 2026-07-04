@@ -7,29 +7,105 @@ const Alert = require('../models/Alert');
 const User = require('../models/User');
 const { sendAlertEmail } = require('../utils/emailService');
 
-// Recommended actions for different alert types
+// Recommended actions for different alert types.
+// Each entry is { summary, steps }: `summary` is the one-line recommendation
+// stored in Alert.recommendedAction (backward compatible with the email
+// template and existing UI); `steps` is an actionable checklist stored in
+// Alert.recommendedSteps and surfaced in the alert detail view.
 const RECOMMENDED_ACTIONS = {
   cpu: {
-    Warning: 'Monitor CPU usage trends. Consider reviewing running processes and optimizing resource usage.',
-    Critical:
-      'Immediately investigate high CPU processes. Consider scaling vertically, adding more CPU resources, or redistributing workloads.',
+    Warning: {
+      summary:
+        'Monitor CPU usage trends. Consider reviewing running processes and optimizing resource usage.',
+      steps: [
+        'Check which processes are consuming the most CPU (`top` / `htop`).',
+        'Look for a runaway job, a traffic spike, or an inefficient query.',
+        'Optimise or reschedule heavy workloads to smooth out the load.',
+      ],
+    },
+    Critical: {
+      summary:
+        'Immediately investigate high CPU processes. Consider scaling vertically, adding more CPU resources, or redistributing workloads.',
+      steps: [
+        'Identify and, if safe, stop the process pinning the CPU.',
+        'Scale the server up (more vCPUs) or out (add instances).',
+        'Redistribute the workload or add caching to reduce demand.',
+      ],
+    },
   },
   ram: {
-    Warning: 'Monitor memory usage. Review applications for memory leaks and consider increasing available memory.',
-    Critical:
-      'Take immediate action on memory usage. Restart memory-intensive applications, consider adding more RAM, or enable swap.',
+    Warning: {
+      summary:
+        'Monitor memory usage. Review applications for memory leaks and consider increasing available memory.',
+      steps: [
+        'Identify the top memory-consuming processes (`free -h`, `top`).',
+        'Watch for a process whose memory only ever grows (likely a leak).',
+        'Plan to add RAM or tune the application before it becomes critical.',
+      ],
+    },
+    Critical: {
+      summary:
+        'Take immediate action on memory usage. Restart memory-intensive applications, consider adding more RAM, or enable swap.',
+      steps: [
+        'Restart the memory-intensive application to reclaim RAM.',
+        'Enable or enlarge swap as a short-term buffer.',
+        'Add more RAM or move the workload to a larger instance.',
+      ],
+    },
   },
   disk: {
-    Warning: 'Monitor disk usage trends. Plan for disk cleanup or expansion soon.',
-    Critical:
-      'Critical disk space shortage. Free up disk space immediately by removing old logs, temporary files, or expanding disk capacity.',
+    Warning: {
+      summary: 'Monitor disk usage trends. Plan for disk cleanup or expansion soon.',
+      steps: [
+        'Run `df -h` to see which filesystem is filling up.',
+        'Use `du -sh /*` to find the largest directories.',
+        'Clear old logs/temp files or plan a disk expansion.',
+      ],
+    },
+    Critical: {
+      summary:
+        'Critical disk space shortage. Free up disk space immediately by removing old logs, temporary files, or expanding disk capacity.',
+      steps: [
+        'SSH into the server.',
+        'Run `df -h` to see which filesystem is full.',
+        'Clear old logs (/var/log) or temporary files.',
+        'If still critical, expand the disk or attach additional storage.',
+      ],
+    },
   },
   down: {
-    Warning: 'Server is unresponsive. Check network connectivity and server status.',
-    Critical:
-      'Server is down. Immediate action required: check if the server is powered on, check network connectivity, and review system logs.',
+    Warning: {
+      summary: 'Server is unresponsive. Check network connectivity and server status.',
+      steps: [
+        'Confirm the server is powered on and reachable (ping / console).',
+        'Verify network connectivity and firewall rules.',
+        'Check that the monitoring agent service is running.',
+      ],
+    },
+    Critical: {
+      summary:
+        'Server is down. Immediate action required: check if the server is powered on, check network connectivity, and review system logs.',
+      steps: [
+        'Check whether the server is powered on and reachable.',
+        'Verify network connectivity and firewall rules.',
+        'Review system logs and restart the monitoring agent.',
+      ],
+    },
   },
 };
+
+/**
+ * Build a business-function-aware alert summary. When the server has business
+ * functions assigned, lead with the first one to make the impact concrete
+ * (e.g. "Website at risk — ..."); otherwise fall back to the generic wording.
+ */
+function buildAlertSummary(type, value, severity, threshold, businessFunctions) {
+  const generic = `${type.toUpperCase()} usage (${value}%) exceeded ${severity.toLowerCase()} threshold (${threshold}%)`;
+  if (businessFunctions && businessFunctions.length > 0) {
+    return `${businessFunctions[0]} at risk — ${generic}`;
+  }
+  return generic;
+}
 
 /**
  * POST /api/metrics
@@ -197,28 +273,54 @@ router.post('/', async (req, res) => {
       }
 
       if (severity) {
-        // Check if an active alert already exists for this server + type
+        // Check if an active *real* (non-predictive) alert already exists for
+        // this server + type. Predictive alerts are excluded here: a proactive
+        // trend warning must NOT block the reactive threshold alert once the
+        // metric actually crosses the line — the real alert supersedes it.
         const existingActiveAlert = await Alert.findOne({
           serverId: matchedServer._id,
           type: check.type,
           status: 'active',
+          predictive: { $ne: true },
         });
 
         if (!existingActiveAlert) {
+          // A real threshold breach supersedes any proactive prediction for the
+          // same metric — resolve the predictive alert so it doesn't sit active
+          // alongside the real one (the trendChecker would otherwise only clear
+          // it on its next tick).
+          await Alert.updateMany(
+            {
+              serverId: matchedServer._id,
+              type: check.type,
+              status: 'active',
+              predictive: true,
+            },
+            { $set: { status: 'resolved', resolvedAt: new Date() } },
+          );
+
           // Create new alert
-          const summary = `${check.type.toUpperCase()} usage (${check.value}%) exceeded ${severity.toLowerCase()} threshold (${exceededThreshold}%)`;
-          const recommendedAction =
-            RECOMMENDED_ACTIONS[check.type]?.[severity] ||
-            'Investigate and resolve the issue.';
+          const businessFunctions = matchedServer.businessFunctions || [];
+          const summary = buildAlertSummary(
+            check.type,
+            check.value,
+            severity,
+            exceededThreshold,
+            businessFunctions,
+          );
+          const rec = RECOMMENDED_ACTIONS[check.type]?.[severity];
+          const recommendedAction = rec?.summary || 'Investigate and resolve the issue.';
+          const recommendedSteps = rec?.steps || [];
 
           const newAlert = new Alert({
             serverId: matchedServer._id,
             severity,
             type: check.type,
             triggerAt: timestamp || new Date(),
-            businessFunctions: matchedServer.businessFunctions || [],
+            businessFunctions,
             summary,
             recommendedAction,
+            recommendedSteps,
             emailTo: serverOwner?.email || '',
             emailStatus: 'pending',
             status: 'active',
@@ -239,11 +341,14 @@ router.post('/', async (req, res) => {
           }
         }
       } else {
-        // Value is back to normal - resolve any active alert for this server+type
+        // Value is back to normal - resolve any active *real* alert for this
+        // server+type. Predictive alerts are left to the trendChecker, which
+        // owns them (a single normal reading doesn't mean the trend reversed).
         const activeAlert = await Alert.findOne({
           serverId: matchedServer._id,
           type: check.type,
           status: 'active',
+          predictive: { $ne: true },
         });
 
         if (activeAlert) {

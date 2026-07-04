@@ -8,6 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 const { startDownChecker } = require('./utils/downChecker');
+const { startTrendChecker } = require('./utils/trendChecker');
 const Metric = require('./models/Metric');
 
 //Connect to MongoDB
@@ -18,8 +19,11 @@ mongoose
     // Reconcile the metric TTL index with METRIC_RETENTION_DAYS (Mongoose won't
     // alter expireAfterSeconds on its own, so this surfaces/applies changes).
     Metric.syncRetentionTTL();
-    // Start the background server-down alert scheduler once the DB is ready
+    // Start the background schedulers once the DB is ready:
+    // - downChecker: reactive "server went silent" detection
+    // - trendChecker: proactive "metric trending toward critical" prediction
     startDownChecker();
+    startTrendChecker();
   })
   .catch(err => {
     console.error('MongoDB connection error:', err);

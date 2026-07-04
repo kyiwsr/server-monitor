@@ -128,6 +128,50 @@
           stripe
           :row-class-name="rowClassName"
         >
+          <el-table-column type="expand">
+            <template #default="{ row }">
+              <div class="alert-detail">
+                <div class="detail-block">
+                  <span class="detail-label">Summary</span>
+                  <p class="detail-text">{{ row.summary }}</p>
+                </div>
+
+                <div class="detail-block" v-if="row.predictive && row.projectedAt">
+                  <span class="detail-label">Projected breach</span>
+                  <p class="detail-text">
+                    Estimated to reach the critical threshold around
+                    <strong>{{ formatTimestamp(row.projectedAt) }}</strong> at the current trend.
+                  </p>
+                </div>
+
+                <div class="detail-block" v-if="row.recommendedAction">
+                  <span class="detail-label">Recommended action</span>
+                  <p class="detail-text">{{ row.recommendedAction }}</p>
+                </div>
+
+                <div class="detail-block" v-if="row.recommendedSteps && row.recommendedSteps.length">
+                  <span class="detail-label">Steps</span>
+                  <ol class="detail-steps">
+                    <li v-for="(step, idx) in row.recommendedSteps" :key="idx">{{ step }}</li>
+                  </ol>
+                </div>
+
+                <div class="detail-block" v-if="row.businessFunctions && row.businessFunctions.length">
+                  <span class="detail-label">Affected business functions</span>
+                  <div class="detail-functions">
+                    <span
+                      v-for="(fn, idx) in row.businessFunctions"
+                      :key="idx"
+                      class="function-tag"
+                      :style="{ background: functionColors[idx % functionColors.length].bg, color: functionColors[idx % functionColors.length].text }"
+                    >
+                      {{ fn }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column label="Time" min-width="150">
             <template #default="{ row }">
               <el-tooltip :content="formatTimestamp(row.triggerAt)" placement="top" :show-after="300">
@@ -150,15 +194,26 @@
               <span class="cell-summary">{{ row.summary }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="Severity" width="100" align="center">
+          <el-table-column label="Severity" width="130" align="center">
             <template #default="{ row }">
-              <el-tag
-                :type="row.severity === 'Critical' ? 'danger' : 'warning'"
-                size="small"
-                effect="dark"
-              >
-                {{ row.severity }}
-              </el-tag>
+              <div class="severity-cell">
+                <el-tag
+                  :type="row.severity === 'Critical' ? 'danger' : 'warning'"
+                  size="small"
+                  effect="dark"
+                >
+                  {{ row.severity }}
+                </el-tag>
+                <el-tag
+                  v-if="row.predictive"
+                  type="info"
+                  size="small"
+                  effect="plain"
+                  class="predicted-tag"
+                >
+                  Predicted
+                </el-tag>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="Status" width="90" align="center">
@@ -237,6 +292,16 @@ const statusFilter = ref('')
 const dateRange = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(20)
+
+// Business-function chip colors — mirrors ServerCard.vue so the tags look
+// consistent between the dashboard and the alert detail view.
+const functionColors = [
+  { bg: '#e0f2fe', text: '#0369a1' },
+  { bg: '#f3e8ff', text: '#7c3aed' },
+  { bg: '#fef3c7', text: '#b45309' },
+  { bg: '#d1fae5', text: '#059669' },
+  { bg: '#fce7f3', text: '#be185d' },
+]
 
 // Derive the summary cards from the alerts currently loaded/filtered so the
 // numbers always agree with what the table shows (rather than mixing all-time
@@ -516,6 +581,74 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-regular);
   line-height: 1.4;
+}
+
+/* Severity + Predicted badge stack */
+.severity-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.predicted-tag {
+  letter-spacing: 0.3px;
+}
+
+/* Expandable alert detail */
+.alert-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 16px 12px 48px;
+}
+
+.detail-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.detail-text {
+  font-size: 13px;
+  color: var(--text-regular);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.detail-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text-regular);
+  line-height: 1.6;
+}
+
+.detail-steps li {
+  margin: 2px 0;
+}
+
+.detail-functions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.detail-functions .function-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
 }
 
 .cell-resolved-time {

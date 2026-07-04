@@ -20,9 +20,17 @@ const Alert = require('../models/Alert');
 const User = require('../models/User');
 const { sendAlertEmail } = require('./emailService');
 
-const DOWN_RECOMMENDED_ACTION =
-  'Server is unreachable — no metrics received within the configured limit. ' +
-  'Check whether the server is powered on, verify network connectivity, and confirm the monitoring agent is running.';
+const DOWN_RECOMMENDED_ACTION = {
+  summary:
+    'Server is unreachable — no metrics received within the configured limit. ' +
+    'Check whether the server is powered on, verify network connectivity, and confirm the monitoring agent is running.',
+  steps: [
+    'Confirm the server is powered on and reachable (ping / provider console).',
+    'Verify network connectivity and firewall rules between the server and this dashboard.',
+    'Check that the monitoring agent service is running (e.g. `systemctl status`).',
+    'Review recent system logs for a crash, reboot, or resource exhaustion.',
+  ],
+};
 
 let intervalHandle = null;
 let isRunning = false;
@@ -92,8 +100,13 @@ async function checkServersOnce() {
 
         if (!existingDownAlert) {
           const owner = server.createdBy ? await User.findById(server.createdBy) : null;
+          const businessFunctions = server.businessFunctions || [];
+          // Lead with the first business function to make the impact concrete
+          // when the server has any assigned; otherwise use the generic wording.
+          const impactPrefix =
+            businessFunctions.length > 0 ? `${businessFunctions[0]} at risk — ` : '';
           const summary =
-            `${server.name} is unreachable — no data received for ` +
+            `${impactPrefix}${server.name} is unreachable — no data received for ` +
             `${Math.round(secondsSinceLastData)}s (limit ${downAfter}s).`;
 
           const alert = new Alert({
@@ -101,9 +114,10 @@ async function checkServersOnce() {
             severity: 'Critical',
             type: 'down',
             triggerAt: new Date(),
-            businessFunctions: server.businessFunctions || [],
+            businessFunctions,
             summary,
-            recommendedAction: DOWN_RECOMMENDED_ACTION,
+            recommendedAction: DOWN_RECOMMENDED_ACTION.summary,
+            recommendedSteps: DOWN_RECOMMENDED_ACTION.steps,
             emailTo: owner?.email || '',
             emailStatus: 'pending',
             status: 'active',

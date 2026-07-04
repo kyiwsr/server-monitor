@@ -98,6 +98,11 @@ const sendAlertEmail = async (alert, server, user) => {
           <div style="background: #fef0f0; border-left: 4px solid #F56C6C; padding: 12px 16px; margin: 16px 0; border-radius: 4px;">
             <strong style="color: #303133;">Recommended Action:</strong>
             <p style="color: #606266; margin: 4px 0 0 0;">${alert.recommendedAction}</p>
+            ${alert.recommendedSteps && alert.recommendedSteps.length > 0 ? `
+            <ol style="color: #606266; margin: 10px 0 0 0; padding-left: 20px; font-size: 14px;">
+              ${alert.recommendedSteps.map(step => `<li style="margin: 4px 0;">${step}</li>`).join('')}
+            </ol>
+            ` : ''}
           </div>
           
           ${alert.businessFunctions && alert.businessFunctions.length > 0 ? `
