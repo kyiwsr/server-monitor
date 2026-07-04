@@ -30,6 +30,11 @@ services:
       EMAIL_PASS: ${EMAIL_PASS:-}
       DOWN_CHECK_INTERVAL_SECONDS: ${DOWN_CHECK_INTERVAL_SECONDS:-30}
       METRIC_RETENTION_DAYS: ${METRIC_RETENTION_DAYS:-30}
+      # Predictive (trend-based) alerting — see backend/utils/trendChecker.js
+      TREND_CHECK_INTERVAL_SECONDS: ${TREND_CHECK_INTERVAL_SECONDS:-300}
+      TREND_LOOKBACK_MINUTES: ${TREND_LOOKBACK_MINUTES:-30}
+      TREND_MIN_SAMPLES: ${TREND_MIN_SAMPLES:-6}
+      PREDICTION_WINDOW_HOURS: ${PREDICTION_WINDOW_HOURS:-6}
       # Seed the demo admin (admin@example.com / admin123) + demo server on boot.
       # Off by default — set to true only for demos/dev, never production.
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
